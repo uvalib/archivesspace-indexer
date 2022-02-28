@@ -44,8 +44,8 @@
                 <field name="uva_availability_f_stored">Online</field>
                 <field name="anon_availability_f_stored">Online</field>
             </xsl:if>
-            <field name="uva_availability_f_stored">On shelf</field>
-            <field name="anon_availability_f_stored">On shelf</field>
+            <!-- <field name="uva_availability_f_stored">On shelf</field>
+            <field name="anon_availability_f_stored">On shelf</field> -->
             <xsl:apply-templates select="*"/>
         </doc>
     </xsl:template>
@@ -87,7 +87,7 @@
 
     <xsl:template match="field[@name = 'library_facet']">
         <field name="library_f_stored">
-            <xsl:value-of select="text()"/>
+            <xsl:value-of select="replace(text(), 'Law School', 'Law')"/>
         </field>
         <xsl:if test="text() = 'Special Collections'">
           <field name="source_f_stored">
