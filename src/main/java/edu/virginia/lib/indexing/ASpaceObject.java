@@ -58,6 +58,8 @@ public abstract class ASpaceObject {
 
     final static public String RIGHTS_WRAPPER_URL = "http://rightswrapper2.lib.virginia.edu:8090/rights-wrapper/";
 
+    final static boolean DEBUG = false;
+    
     protected ArchivesSpaceClient c;
 
     protected String refId;
@@ -84,6 +86,7 @@ public abstract class ASpaceObject {
         if (record == null) {
             try {
                 record = c.resolveReference(refId);
+                if (DEBUG) System.out.println(this.record);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -352,6 +355,12 @@ public abstract class ASpaceObject {
                 }
             }
 
+            // access restrctions note
+            final JsonValue restrictions = getRecord().get("access_restrictions_note");
+            if (restrictions != null) {
+                addField(xmlOut, "access_restrictions_display", restrictions.toString());
+            }
+            
             // linked agents
             final JsonValue agents = getRecord().get("linked_agents");
             if (agents != null && agents.getValueType() == JsonValue.ValueType.ARRAY) {
