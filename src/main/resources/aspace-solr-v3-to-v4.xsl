@@ -87,7 +87,7 @@
     
     <xsl:template match="field[@name = 'access_restrictions_display']">
         <field name="access_restrictions_tsearch_stored">
-            <xsl:value-of select="replace(text(), '(\r|\\r)(\n|\\n)', '')"/>
+            <xsl:value-of select="replace(replace(replace(text(), '(\r|\\r)(\n|\\n)', ''), '^&quot;', ''), '&quot;$', '')"/>
         </field>
     </xsl:template>
     
