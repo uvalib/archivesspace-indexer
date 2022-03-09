@@ -86,14 +86,9 @@
     </xsl:template>
     
     <xsl:template match="field[@name = 'access_restrictions_note']">
-        <field name="access_restrictions_tsearch_stored">
+        <field name="access_note_tsearch_stored">
             <xsl:value-of select="replace(text(), '(\r|\\r)(\n|\\n)', '')"/>
         </field>
-        <xsl:if test="text() = 'Special Collections'">
-            <field name="source_f_stored">
-                <xsl:value-of select="text()"/>
-            </field>
-        </xsl:if>
     </xsl:template>
     
     <xsl:template match="field[@name = 'library_facet']">
