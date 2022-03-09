@@ -85,9 +85,9 @@
         <field name="url_label_supp_a">GUIDE TO THE COLLECTION AVAILABLE ONLINE</field>
     </xsl:template>
     
-    <xsl:template match="field[@name = 'access_restrictions_note']">
+    <xsl:template match="field[@name = 'access_restrictions_display']">
         <field name="access_note_tsearch_stored">
-            <xsl:value-of select="replace(text(), '(\r|\\r)(\n|\\n)', '')"/>
+            <xsl:value-of select="replace(replace(replace(text(), '(\r|\\r)(\n|\\n)', ''), '^&quot;', ''), '&quot;$', '')"/>
         </field>
     </xsl:template>
     
