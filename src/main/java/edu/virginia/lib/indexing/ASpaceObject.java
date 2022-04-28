@@ -18,6 +18,7 @@ import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
+import javax.json.JsonString;
 import javax.json.JsonValue;
 import javax.json.stream.JsonParsingException;
 import javax.xml.stream.XMLOutputFactory;
@@ -831,11 +832,17 @@ public abstract class ASpaceObject {
                 shortManifestId = "MSS16152";
             }
 
-            final String rsUri = iiifManifest.getString("license");
-            addRightsFields(rsUri, xmlOut, shortManifestId, dbHost, dbUser, dbPassword);
-
+            final JsonString rsJsonUri = iiifManifest.getJsonString("license");
+            if (rsJsonUri != null)
+            {
+            	final String rsUri = rsJsonUri.getString();
+                addRightsFields(rsUri, xmlOut, shortManifestId, dbHost, dbUser, dbPassword);
+            }
             addField(xmlOut, "alternate_id_facet", shortManifestId);
-            addField(xmlOut, "individual_call_number_display", iiifManifest.getString("label"));
+            if (iiifManifest.getJsonString("label") != null)
+            {
+            	addField(xmlOut, "individual_call_number_display", iiifManifest.getString("label"));
+            }
             if (thumbnail) {
                 String thumbnailUrl = iiifManifest.getJsonArray("sequences").getJsonObject(0).getJsonArray("canvases").getJsonObject(0).getString("thumbnail");
                 Matcher resizeMatcher = Pattern.compile("(https://.*/full/)[^/]*(/.*)").matcher(thumbnailUrl);
