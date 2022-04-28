@@ -42,6 +42,7 @@ public class IndexRecords {
         final String host = p.getProperty("tracksysDbHost");
         final String user = p.getProperty("tracksysDbUsername");
         final String pass = p.getProperty("tracksysDbPassword");
+        final String v3Orv4 = p.getProperty("outputRecordType", "v3");
 
         final int intervalInHours = Integer.valueOf(p.getProperty("interval"));
 
@@ -87,7 +88,12 @@ public class IndexRecords {
         for (String ref : refsToUpdate) {
             try {
                 ASpaceObject o = ASpaceObject.parseObject(c, ref);
-                o.generateSolrAddDoc(output, host, user, pass);
+                if (v3Orv4.contentEquals("v4")) {
+                	o.generateV4SolrAddDoc(output, host, user, pass);
+                }
+                else {
+                	o.generateSolrAddDoc(output, host, user, pass);
+                }
                 if (isSpecialCollections(ref)) {
                     o.writeCirculationRecord(xmlWriter, marcStream);
                 }

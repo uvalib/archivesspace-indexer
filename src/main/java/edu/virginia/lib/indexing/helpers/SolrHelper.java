@@ -96,7 +96,7 @@ public class SolrHelper {
     }
 
     public static File getSolrOutputFile(final File outputDir, final String refId) {
-        return new File(outputDir, getIdFromRef(refId) + ".xml");
+        return new File(outputDir, getIdFromRef(refId).replace(':', '_') + ".xml");
     }
 
     /**

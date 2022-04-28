@@ -503,6 +503,306 @@ public abstract class ASpaceObject {
 
     }
 
+    public File generateV4SolrAddDoc(final File outputDir, final String dbHost, final String dbUser, final String dbPassword) throws IOException, XMLStreamException, SQLException {
+        final String shortRefId = getIdFromRef(getRecord().getString("uri"));
+        final String callNumber = getCallNumber().replaceFirst("ms ","MS_");
+        final String title = getRecord().getString("title");
+
+        XMLOutputFactory xmlOutputFactory = XMLOutputFactory.newFactory();
+        final File outputFile = getSolrOutputFile(outputDir, getRecord().getString("uri"));
+        outputFile.getParentFile().mkdirs();
+        XMLStreamWriter xmlOut = xmlOutputFactory.createXMLStreamWriter(new FileOutputStream(outputFile));
+        xmlOut.writeStartDocument("UTF-8", "1.0");
+        xmlOut.writeCharacters("\n");
+        xmlOut.writeStartElement("add");
+        xmlOut.writeCharacters("  ");
+        xmlOut.writeStartElement("doc");
+        xmlOut.writeCharacters("\n");
+
+        addField(xmlOut, "id", shortRefId);
+        String hid = getId();
+        // Despite it's name, "alternate_id_facet" currently must only be an alternate id that represents a
+        // distinct digital object for which there's an IIIF manifest, rights_wrapper_url, etc.
+        //
+        //if (isUniqueVirgoId(hid)) {
+        //    addField(xmlOut, "alternate_id_facet", hid);
+        //}
+        addField(xmlOut, "aspace_version_f", String.valueOf(getLockVersion()));
+        addField(xmlOut, "call_number_tsearch_stored", callNumber);
+        addField(xmlOut, "mss_work_key_sort", callNumber);
+        addField(xmlOut, "work_title3_key_ssort", callNumber);
+        addField(xmlOut, "work_title2_key_ssort", callNumber);
+
+        addField(xmlOut, "title_tsearch_stored", title);
+        addField(xmlOut, "full_title_tsearchf_stored", title);
+        addField(xmlOut, "source_f_stored", "ArchivesSpace");
+        addField(xmlOut, "pool_f", "archival");
+        addField(xmlOut, "data_source_f_stored", "archivespace");
+        addField(xmlOut, "circulating_f", "false");
+        addField(xmlOut, "format_f_stored", "Manuscript/Archive");
+        addField(xmlOut, "uva_availability_f_stored", "Online");
+        addField(xmlOut, "anon_availability_f_stored", "Online");
+
+        final boolean shadowed = isShadowed();
+        addField(xmlOut, "shadowed_location_f", shadowed ? "HIDDEN" : "VISIBLE");
+        if (!shadowed) {
+
+            // TODO: get this from the data
+            //addRightsFields("http://rightsstatements.org/vocab/InC-EDU/1.0/", xmlOut, id, tracksysDbHost, tracksysDbUsername, tracksysDbPassword);
+
+            // TODO: do something with finding aid status
+
+            String library = getLibrary(getRecord());
+            if (library.equals("Law School")) {
+            	library = "Law";
+            }
+            addField(xmlOut, "library_f_stored", library);
+            if (library.equals("Special Collections")) {
+                addField(xmlOut, "source_f_stored", library);            	
+            }
+
+            // TODO location_facet
+
+            // subjects
+            final JsonValue subjects = getRecord().get("subjects");
+            if (subjects != null && subjects.getValueType() == JsonValue.ValueType.ARRAY) {
+                for (JsonValue sub : (JsonArray) subjects) {
+                    final String ref = ((JsonObject) sub).getString("ref");
+                    final JsonObject subject = c.resolveReference(ref);
+                    // TODO: break up these subjects
+                    if (subject.getBoolean("publish")) {
+                        addField(xmlOut, "subject_tsearchf_stored", subject.getString("title"));
+                    }
+                }
+            }
+
+            // extents
+            final JsonValue extents = getRecord().get("extents");
+            if (extents != null && extents.getValueType() == JsonValue.ValueType.ARRAY) {
+                for (JsonValue extent : (JsonArray) extents) {
+                    JsonObject e = (JsonObject) extent;
+
+                    StringBuffer extentString = new StringBuffer();
+                    extentString.append(e.getString("number"));
+                    extentString.append(" ");
+                    final String type = e.getString("extent_type");
+                    extentString.append(type.replace("_", " "));
+                    if (e.get("container_summary") != null) {
+                        extentString.append(" (" + e.getString("container_summary") + ")");
+                    }
+                    addField(xmlOut, "extent_tsearch_stored", extentString.toString());
+                }
+            }
+
+            // dates
+            boolean sortDateSet = false;
+            final JsonValue dates = getRecord().get("dates");
+            if (dates != null && dates.getValueType() == JsonValue.ValueType.ARRAY) {
+                for (JsonValue date : (JsonArray) dates) {
+                    try {
+                        final JsonObject dateObj = (JsonObject) date;
+                        if (hasValue(dateObj, "expression")) {
+                            final String dateStr = ((JsonObject) date).getString("expression");
+                            int year = -1;
+                            if (dateStr.matches("\\d\\d\\d\\d")) {
+                                year = Integer.parseInt(dateStr);
+                                addField(xmlOut, "published_date", String.valueOf(year)+"-01-01T00:00:00Z" );
+                                addField(xmlOut, "published_daterange", String.valueOf(year));
+                            } 
+                            else if (dateStr.matches("\\d\\d\\d\\d-\\d\\d\\d\\d")) {
+                                year = Integer.parseInt(dateStr.substring(5));
+                                addField(xmlOut, "published_date", String.valueOf(year)+"-01-01T00:00:00Z" );
+                                addField(xmlOut, "published_daterange", "["+dateStr.substring(0, 5)+ " TO " +year+"]");
+                            }
+                            addField(xmlOut, "published_display_a", dateStr);
+                        } else if (hasValue(dateObj, "begin") && hasValue(dateObj, "end")) {
+                            final String begin = ((JsonObject) date).getString("begin");
+                            final String end = ((JsonObject) date).getString("end");
+                            if (begin != null && end != null) {
+                                addField(xmlOut, "published_display_a", begin + "-" + end);
+                            }
+                        }
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }
+            }
+
+            // access restrictions note
+            final JsonValue restrictions = getRecord().get("access_restrictions_note");
+            if (restrictions != null) {
+                String restrictionsStr = restrictions.toString().replaceAll("\r\n", "").replaceFirst("^\"", "").replaceFirst("\"$","");
+                addField(xmlOut, "access_note_tsearch_stored", restrictionsStr);
+            }
+            
+            // linked agents
+            final JsonValue agents = getRecord().get("linked_agents");
+            if (agents != null && agents.getValueType() == JsonValue.ValueType.ARRAY) {
+                for (JsonValue agentLink : (JsonArray) agents) {
+                    final String ref = ((JsonObject) agentLink).getString("ref");
+                    final String role = ((JsonObject) agentLink).getString("role");
+                    final JsonObject agent = c.resolveReference(ref);
+                    try {
+                        if (agent.getBoolean("publish")) {
+                            if (role.equals("creator")) {
+                                final String name = agent.getString("title");
+                                addField(xmlOut, "author_tsearchf_stored", name);
+                            }
+                        }
+                    } catch (NullPointerException e) {
+                        // TODO: do something better than skipping it
+                    }
+                }
+            }
+
+            // Top Containers
+            JsonArrayBuilder containersBuilder = Json.createArrayBuilder();
+            List<ASpaceTopContainer> containers = new ArrayList<>(getTopContainers());
+            // System.err.println("Pre-Sort");
+            // for (ASpaceTopContainer container : containers) {
+            //     System.err.println(container.getContainerCallNumber(getCallNumber()));
+            // }
+            Collections.sort(containers, new Comparator<ASpaceTopContainer>() {
+                @Override
+                public int compare(ASpaceTopContainer o1, ASpaceTopContainer o2) {
+                	StringNaturalCompare comp = new StringNaturalCompare(); 
+                	return comp.compare(o1.getContainerCallNumber(""), o2.getContainerCallNumber(""));
+                }
+            });
+            // System.err.println("Post-Sort");
+            // for (ASpaceTopContainer container : containers) {
+            //     System.err.println(container.getContainerCallNumber(getCallNumber()));
+            // }
+
+            for (ASpaceTopContainer container : containers) {
+                JsonObjectBuilder b = Json.createObjectBuilder();
+                b.add("library", library);
+                b.add("current_location", container.getLocation());
+                b.add("call_number", container.getContainerCallNumber(getCallNumber()));
+                b.add("barcode", container.getBarcode());
+                b.add("special_collections_location", container.getCurrentLocation());
+                containersBuilder.add(b.build());
+            }
+            addField(xmlOut, "sc_availability_large_single", containersBuilder.build().toString());
+
+
+            // Digital Objects
+            int manifestsIncluded = 0;
+            if (getDigitalObjects().size() <= 5) {
+                for (ASpaceDigitalObject digitalObject : getDigitalObjects()) {
+                    if (digitalObject.getIIIFURL() != null) {
+                        try {
+                            addDigitalImages(digitalObject.getIIIFURL(), xmlOut, manifestsIncluded == 0, dbHost, dbUser, dbPassword);
+                            manifestsIncluded++;
+                        } catch (IOException ex) {
+                            System.err.println("Unable to fetch manifest: " + digitalObject.getIIIFURL());
+                        }
+                    }
+                }
+            }
+            if (manifestsIncluded > 0) {
+//                addField(xmlOut, "feature_facet", "iiif");
+                addField(xmlOut, "format_f_stored", "Online");
+            } else {
+                addField(xmlOut, "thumbnail_url_a", "http://iiif.lib.virginia.edu/iiif/static:6/full/!115,125/0/default.jpg");
+            }
+
+            // Despite it's name, "alternate_id_facet" currently must only be an alternate id that represents a
+            // distinct digital object for which there's an IIIF manifest, rights_wrapper_url, etc.
+            //
+            // related accessions (use for alternate ids)
+            //final JsonValue accessions = getRecord().get("related_accessions");
+            //if (accessions != null && accessions.getValueType() == JsonValue.ValueType.ARRAY) {
+            //    for (JsonValue a : (JsonArray) accessions) {
+            //        final String ref = ((JsonObject) a).getString("ref");
+            //        final ASpaceAccession accession = new ASpaceAccession(c, ref);
+            //        addField(xmlOut, "alternate_id_facet", accession.getId());
+            //    }
+            //}
+
+            // notes (right now, we only include the scope notes)
+            final JsonValue notes = getRecord().get("notes");
+            if (notes != null && notes.getValueType() == JsonValue.ValueType.ARRAY) {
+                for (JsonValue n : (JsonArray) notes) {
+                    JsonObject note = (JsonObject) n;
+                    if (note.getBoolean("publish")) 
+                    {
+                        JsonArray subnotes = note.getJsonArray("subnotes");
+                        String noteText;
+                        if (subnotes != null) 
+                        {
+                            StringBuffer noteTextBuffer = new StringBuffer();
+                            for (int i = 0; i < subnotes.size(); i++) 
+                            {
+                                JsonObject subnote = subnotes.getJsonObject(i);
+                                if (subnote.getBoolean("publish") && subnote.get("content") != null) 
+                                {
+                                    if (noteTextBuffer.length() > 0) 
+                                    {
+                                    	noteTextBuffer.append("\n");
+                                    }
+                                    noteTextBuffer.append(subnote.getString("content"));
+                                }
+                            }
+                            noteText = noteTextBuffer.toString();
+                        }
+                        else
+                        {
+                        	noteText = note.getJsonArray("content").getJsonString(0).toString();
+                        }
+                        if (noteText.length() > 0)
+                        {
+                            if (note.getString("type").equals("abstract"))
+                            {
+                                addField(xmlOut, "subject_abstract_a", noteText);
+                                addField(xmlOut, "subject_summary_tsearch", noteText);
+                            }
+                            else if (note.getString("type").equals("scopecontent"))
+                            {
+                                addField(xmlOut, "note_tsearch_stored", noteText);
+                            }
+                            else if (note.getString("type").equals("accessrestrict"))
+                            {
+                                addField(xmlOut, "access_note_a", noteText);
+                            }
+                            else if (note.getString("type").equals("bioghist"))
+                            {
+                            	addField(xmlOut, "biographical_note_tsearch_stored", noteText);
+                            }
+                            else if (note.getString("type").equals("prefercite"))
+                            {
+                            	addField(xmlOut, "citation_note_a", noteText);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (getRecord().get("content_description") != null) {
+            final String noteText = getRecord().getString("content_description");
+            addField(xmlOut, "note_tsearch_stored", noteText.toString());
+        }
+
+        addField(xmlOut, "url_supp_a", "https://archives.lib.virginia.edu" + getRecord().getString("uri"));
+        addField(xmlOut, "url_label_supp_a", "GUIDE TO THE COLLECTION AVAILABLE ONLINE");
+
+        // A feature_facet is needed for proper display in Virgo.
+//        addField(xmlOut, "feature_facet", "suppress_endnote_export");
+//        addField(xmlOut, "feature_facet", "suppress_refworks_export");
+//        addField(xmlOut, "feature_facet", "suppress_ris_export");
+
+        xmlOut.writeCharacters("  ");
+        xmlOut.writeEndElement(); // doc
+        xmlOut.writeCharacters("\n");
+        xmlOut.writeEndElement(); // add
+
+        xmlOut.close();
+
+        return outputFile;
+
+    }
+
     private JsonArray dedupeContainerArray(JsonArray containers) {
         HashSet<String> callNumbers = new HashSet<String>();
         JsonArrayBuilder b = Json.createArrayBuilder();

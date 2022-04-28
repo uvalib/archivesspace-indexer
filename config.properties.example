@@ -3,6 +3,7 @@ archivesSpaceUrl:http://localhost:8089/
 archivesSpaceSolrUrl:
 interval:1
 indexOutputDir:index
+outputRecordType:v4
 marcOutputDir:catalog/marc
 marcXmlOutputDir:catalog/xml
 logOutputDir:logs
