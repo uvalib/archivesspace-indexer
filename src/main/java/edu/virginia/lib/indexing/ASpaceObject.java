@@ -613,7 +613,7 @@ public abstract class ASpaceObject {
                             else if (dateStr.matches("\\d\\d\\d\\d-\\d\\d\\d\\d")) {
                                 year = Integer.parseInt(dateStr.substring(5));
                                 addField(xmlOut, "published_date", String.valueOf(year)+"-01-01T00:00:00Z" );
-                                addField(xmlOut, "published_daterange", "["+dateStr.substring(0, 5)+ " TO " +year+"]");
+                                addField(xmlOut, "published_daterange", "["+dateStr.substring(0, 4)+ " TO " +year+"]");
                             }
                             addField(xmlOut, "published_display_a", dateStr);
                         } else if (hasValue(dateObj, "begin") && hasValue(dateObj, "end")) {
@@ -753,26 +753,35 @@ public abstract class ASpaceObject {
                         }
                         if (noteText.length() > 0)
                         {
-                            if (note.getString("type").equals("abstract"))
+                            String noteType = note.getJsonString("type") != null ? note.getJsonString("type").getString() : "";
+                        	if (noteType.equals("abstract"))
                             {
                                 addField(xmlOut, "subject_abstract_a", noteText);
                                 addField(xmlOut, "subject_summary_tsearch", noteText);
                             }
-                            else if (note.getString("type").equals("scopecontent"))
+                            else if (noteType.equals("scopecontent") || noteType.equals("arrangement"))
                             {
                                 addField(xmlOut, "note_tsearch_stored", noteText);
                             }
-                            else if (note.getString("type").equals("accessrestrict"))
+                            else if (noteType.equals("accessrestrict"))
                             {
                                 addField(xmlOut, "access_note_a", noteText);
                             }
-                            else if (note.getString("type").equals("bioghist"))
+                            else if (noteType.equals("bioghist"))
                             {
                             	addField(xmlOut, "biographical_note_tsearch_stored", noteText);
                             }
-                            else if (note.getString("type").equals("prefercite"))
+                            else if (noteType.equals("prefercite"))
                             {
                             	addField(xmlOut, "citation_note_a", noteText);
+                            }
+                            else if (noteType.equals("acqinfo"))
+                            {
+                            	addField(xmlOut, "note_tsearch_stored", noteText);
+                            }
+                            else
+                            {
+                            	noteType = "unknown";
                             }
                         }
                     }
