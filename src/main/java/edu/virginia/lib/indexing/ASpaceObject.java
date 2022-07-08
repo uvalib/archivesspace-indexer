@@ -598,9 +598,11 @@ public abstract class ASpaceObject {
             // dates
             boolean sortDateSet = false;
             final JsonValue dates = getRecord().get("dates");
+            boolean dateDone = false;
             if (dates != null && dates.getValueType() == JsonValue.ValueType.ARRAY) {
                 for (JsonValue date : (JsonArray) dates) {
                     try {
+                        if (dateDone) continue;
                         final JsonObject dateObj = (JsonObject) date;
                         if (hasValue(dateObj, "expression")) {
                             final String dateStr = ((JsonObject) date).getString("expression");
@@ -611,17 +613,25 @@ public abstract class ASpaceObject {
                                 addField(xmlOut, "published_daterange", String.valueOf(year));
                             } 
                             else if (dateStr.matches("\\d\\d\\d\\d-\\d\\d\\d\\d")) {
-                                year = Integer.parseInt(dateStr.substring(5));
-                                addField(xmlOut, "published_date", String.valueOf(year)+"-01-01T00:00:00Z" );
-                                addField(xmlOut, "published_daterange", "["+dateStr.substring(0, 4)+ " TO " +year+"]");
+                                int yearEnd = Integer.parseInt(dateStr.substring(5));
+                                int yearBegin = Integer.parseInt(dateStr.substring(0, 4));
+                                addField(xmlOut, "published_date", String.valueOf(yearEnd)+"-01-01T00:00:00Z" );
+                                if (yearEnd > yearBegin) addField(xmlOut, "published_daterange", "["+yearBegin+ " TO " +yearEnd+"]");
                             }
                             addField(xmlOut, "published_display_a", dateStr);
-                        } else if (hasValue(dateObj, "begin") && hasValue(dateObj, "end")) {
+                            dateDone = true;
+                        } 
+                        else if (hasValue(dateObj, "begin") && hasValue(dateObj, "end")) {
                             final String begin = ((JsonObject) date).getString("begin");
                             final String end = ((JsonObject) date).getString("end");
                             if (begin != null && end != null) {
                                 addField(xmlOut, "published_display_a", begin + "-" + end);
                             }
+                            int yearEnd = Integer.parseInt(begin);
+                            int yearBegin = Integer.parseInt(end);
+                            addField(xmlOut, "published_date", String.valueOf(yearEnd)+"-01-01T00:00:00Z" );
+                            if (yearEnd > yearBegin) addField(xmlOut, "published_daterange", "["+yearBegin+ " TO " +yearEnd+"]");
+                            dateDone = true;
                         }
                     } catch (Exception ex) {
                         throw new RuntimeException(ex);
@@ -693,7 +703,7 @@ public abstract class ASpaceObject {
                 for (ASpaceDigitalObject digitalObject : getDigitalObjects()) {
                     if (digitalObject.getIIIFURL() != null) {
                         try {
-                            addDigitalImages(digitalObject.getIIIFURL(), xmlOut, manifestsIncluded == 0, dbHost, dbUser, dbPassword);
+                        	addDigitalImagesV4(digitalObject.getIIIFURL(), xmlOut, manifestsIncluded == 0, dbHost, dbUser, dbPassword);
                             manifestsIncluded++;
                         } catch (IOException ex) {
                             System.err.println("Unable to fetch manifest: " + digitalObject.getIIIFURL());
@@ -847,7 +857,7 @@ public abstract class ASpaceObject {
             	final String rsUri = rsJsonUri.getString();
                 addRightsFields(rsUri, xmlOut, shortManifestId, dbHost, dbUser, dbPassword);
             }
-            addField(xmlOut, "alternate_id_facet", shortManifestId);
+            addField(xmlOut, "alternate_id_f_stored", shortManifestId);
             if (iiifManifest.getJsonString("label") != null)
             {
             	addField(xmlOut, "individual_call_number_display", iiifManifest.getString("label"));
@@ -868,6 +878,52 @@ public abstract class ASpaceObject {
             }
 
             addField(xmlOut, "iiif_presentation_metadata_display", iiifManifest.toString());
+        } catch (JsonParsingException e) {
+            throw new RuntimeException("Unable to parse IIIF manifest at " + manifestUrl);
+        }
+    }
+    
+    private static void addDigitalImagesV4(final String manifestUrl, final XMLStreamWriter xmlOut, boolean thumbnail, final String dbHost, final String dbUser, final String dbPassword) throws IOException, XMLStreamException, SQLException {
+        HttpGet httpGet = new HttpGet(manifestUrl);
+        try (CloseableHttpResponse response = HttpClients.createDefault().execute(httpGet)) {
+            if (response.getStatusLine().getStatusCode() != 200) {
+                throw new RuntimeException("Unable to get IIIF manifest at " + manifestUrl + " (" + response.getStatusLine().toString() + ")");
+            }
+            JsonObject iiifManifest = Json.createReader(response.getEntity().getContent()).readObject();
+            final String manifestId = iiifManifest.getString("@id");
+            String shortManifestId = manifestId.substring(manifestId.lastIndexOf('/') + 1);
+            if (shortManifestId.equals("iiif-manifest.json")) {
+                // hack for Shepherd until it's in the tracking system
+                shortManifestId = "MSS16152";
+            }
+
+            final JsonString rsJsonUri = iiifManifest.getJsonString("license");
+            if (rsJsonUri != null)
+            {
+            	final String rsUri = rsJsonUri.getString();
+                addRightsFields(rsUri, xmlOut, shortManifestId, dbHost, dbUser, dbPassword);
+            }
+            addField(xmlOut, "alternate_id_f_stored", shortManifestId);
+            if (iiifManifest.getJsonString("label") != null)
+            {
+            	addField(xmlOut, "individual_call_number_a", iiifManifest.getString("label"));
+            }
+            if (thumbnail) {
+                String thumbnailUrl = iiifManifest.getJsonArray("sequences").getJsonObject(0).getJsonArray("canvases").getJsonObject(0).getString("thumbnail");
+                Matcher resizeMatcher = Pattern.compile("(https://.*/full/)[^/]*(/.*)").matcher(thumbnailUrl);
+                if (resizeMatcher.matches()) {
+                    thumbnailUrl = resizeMatcher.group(1) + "!115,125" + resizeMatcher.group(2);
+                    addField(xmlOut, "thumbnail_url_a", thumbnailUrl);
+
+                    // TODO: maybe use this as the thumbnail, maybe don't...
+                } else {
+                    throw new RuntimeException("Unexpected thumbnail URL! (" + thumbnailUrl + ")");
+                }
+
+                // TODO: you can pull out the rights statement and apply it to the record
+            }
+
+            //addField(xmlOut, "iiif_presentation_metadata_display", iiifManifest.toString());
         } catch (JsonParsingException e) {
             throw new RuntimeException("Unable to parse IIIF manifest at " + manifestUrl);
         }
