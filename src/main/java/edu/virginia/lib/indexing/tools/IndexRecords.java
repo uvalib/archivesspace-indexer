@@ -29,6 +29,8 @@ import java.util.Set;
  */
 public class IndexRecords {
 
+	public final static String knownBadRefs = " /repositories/7/resources/174 /repositories/3/accessions/1274 /repositories/7/resources/155 "+
+				"/repositories/7/resources/167 /repositories/7/resources/168 /repositories/7/resources/124 /repositories/7/resources/125 ";
     public static void main(String [] args) throws Exception {
         Properties p = new Properties();
         try (FileInputStream fis = new FileInputStream("config.properties")) {
@@ -61,6 +63,7 @@ public class IndexRecords {
 
         int reindexed = 0;
         List<String> errorRefs = new ArrayList<>();
+        List<String> expectedErrorRefs = new ArrayList<>();
         final Set<String> refsToUpdate = new HashSet<>();
         if (args.length == 0) {
             List<String> repos = findUpdatedRepositories(solrUrl, intervalInHours);
@@ -102,8 +105,14 @@ public class IndexRecords {
                 reindexed ++;
             } catch (Throwable t) {
                 t.printStackTrace(published);
-                published.println(ref + ": skipped due to runtime error " + t.toString());
-                errorRefs.add(ref);
+                if (knownBadRefs.contains(" "+ref+ " ") && t.toString().contains("404 Not Found")) {
+                	published.println(ref + ": skipped due to EXPECTED runtime error " + t.toString());
+                	expectedErrorRefs.add(ref);
+                }
+                else { 
+                	published.println(ref + ": skipped due to runtime error " + t.toString());
+                    errorRefs.add(ref);
+                }
             }
         }
         marcStream.close();
@@ -113,11 +122,16 @@ public class IndexRecords {
         published.println((elapsedSeconds / 60) + " minutes elapsed");
         published.close();
 
-        if (errorRefs.isEmpty()) {
+        if (errorRefs.isEmpty() && expectedErrorRefs.isEmpty()) {
             System.out.println("Updated index and marc records for the " + reindexed + " resources/accessions in ArchivesSpace that changed in the last " + intervalInHours + " hours.");
-        } else {
-            System.err.println(errorRefs.size() + " records resulted in errors, " + reindexed + " other index/marc records updated in responses to changes in the last " + intervalInHours + " hours.");
-            System.exit(1);
+        } 
+        else {
+            System.err.println(errorRefs.size() + " records resulted in errors, ");
+            System.err.println(expectedErrorRefs.size() + " records resulted in EXPECTED errors, ");
+            System.err.println(reindexed + " other index/marc records updated in responses to changes in the last " + intervalInHours + " hours.");
+            if (!errorRefs.isEmpty()) {
+            	System.exit(1);
+            }
         }
     }
 
