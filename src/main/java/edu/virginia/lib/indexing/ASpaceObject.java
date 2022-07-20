@@ -624,14 +624,31 @@ public abstract class ASpaceObject {
                         else if (hasValue(dateObj, "begin") && hasValue(dateObj, "end")) {
                             final String begin = ((JsonObject) date).getString("begin");
                             final String end = ((JsonObject) date).getString("end");
-                            if (begin != null && end != null) {
-                                addField(xmlOut, "published_display_a", begin + "-" + end);
+                            if (begin.matches("\\d\\d\\d\\d-\\d\\d-\\d\\d") && end.matches("\\d\\d\\d\\d-\\d\\d-\\d\\d")) {
+                            	addField(xmlOut, "published_display_a", begin + " - " + end);
+                                addField(xmlOut, "published_date", end+"T00:00:00Z" );
+                                if (end.compareTo(begin) > 0) addField(xmlOut, "published_daterange", "["+begin+ " TO " +end+"]");
+                                else if (end.compareTo(begin) == 0)  addField(xmlOut, "published_daterange", ""+end);
+                                dateDone = true;
                             }
-                            int yearEnd = Integer.parseInt(begin);
-                            int yearBegin = Integer.parseInt(end);
-                            addField(xmlOut, "published_date", String.valueOf(yearEnd)+"-01-01T00:00:00Z" );
-                            if (yearEnd > yearBegin) addField(xmlOut, "published_daterange", "["+yearBegin+ " TO " +yearEnd+"]");
-                            dateDone = true;
+                            else if (begin.matches("\\d\\d\\d\\d-\\d\\d") && end.matches("\\d\\d\\d\\d-\\d\\d")) {
+                            	addField(xmlOut, "published_display_a", begin + " - " + end);
+                                addField(xmlOut, "published_date", end+"-01T00:00:00Z" );
+                                if (end.compareTo(begin) > 0) addField(xmlOut, "published_daterange", "["+begin+ " TO " +end+"]");
+                                else if (end.compareTo(begin) == 0)  addField(xmlOut, "published_daterange", ""+end);
+                                dateDone = true;
+                            }
+                            else {
+                            	if (begin != null && end != null) {
+                            		addField(xmlOut, "published_display_a", begin.replace("-",  "/") + "-" + end.replace("-",  "/"));
+                            	}
+                                int yearEnd = Integer.parseInt(begin.replaceAll("([0-9]*).*", "$1"));
+                                int yearBegin = Integer.parseInt(end.replaceAll("([0-9]*).*", "$1"));
+                                addField(xmlOut, "published_date", String.valueOf(yearEnd)+"-01-01T00:00:00Z" );
+                                if (yearEnd > yearBegin) addField(xmlOut, "published_daterange", "["+yearBegin+ " TO " +yearEnd+"]");
+                                else if (yearEnd == yearBegin) addField(xmlOut, "published_daterange", ""+yearBegin);
+                                dateDone = true;
+                            }
                         }
                     } catch (Exception ex) {
                         throw new RuntimeException(ex);
