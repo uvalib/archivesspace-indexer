@@ -259,6 +259,7 @@ public abstract class ASpaceObject {
         addField(xmlOut, "format_facet", "Manuscript/Archive");
         final boolean shadowed = isShadowed();
         addField(xmlOut, "shadowed_location_facet", shadowed ? "HIDDEN" : "VISIBLE");
+        
         if (!shadowed) {
 
             // TODO: get this from the data
@@ -513,6 +514,7 @@ public abstract class ASpaceObject {
         final File outputFile = getSolrOutputFile(outputDir, getRecord().getString("uri"));
         outputFile.getParentFile().mkdirs();
         XMLStreamWriter xmlOut = xmlOutputFactory.createXMLStreamWriter(new FileOutputStream(outputFile));
+        String path = outputFile.getAbsolutePath();
         xmlOut.writeStartDocument("UTF-8", "1.0");
         xmlOut.writeCharacters("\n");
         xmlOut.writeStartElement("add");
@@ -546,6 +548,7 @@ public abstract class ASpaceObject {
 
         final boolean shadowed = isShadowed();
         addField(xmlOut, "shadowed_location_f", shadowed ? "HIDDEN" : "VISIBLE");
+        System.out.println(shortRefId+" = "+(shadowed ? "HIDDEN" : "VISIBLE"));
         if (!shadowed) {
 
             // TODO: get this from the data
@@ -642,8 +645,8 @@ public abstract class ASpaceObject {
                             	if (begin != null && end != null) {
                             		addField(xmlOut, "published_display_a", begin.replace("-",  "/") + "-" + end.replace("-",  "/"));
                             	}
-                                int yearEnd = Integer.parseInt(begin.replaceAll("([0-9]*).*", "$1"));
-                                int yearBegin = Integer.parseInt(end.replaceAll("([0-9]*).*", "$1"));
+                                int yearBegin = Integer.parseInt(begin.replaceAll("([0-9]*).*", "$1"));
+                                int yearEnd = Integer.parseInt(end.replaceAll("([0-9]*).*", "$1"));
                                 addField(xmlOut, "published_date", String.valueOf(yearEnd)+"-01-01T00:00:00Z" );
                                 if (yearEnd > yearBegin) addField(xmlOut, "published_daterange", "["+yearBegin+ " TO " +yearEnd+"]");
                                 else if (yearEnd == yearBegin) addField(xmlOut, "published_daterange", ""+yearBegin);
