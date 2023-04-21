@@ -68,6 +68,10 @@ public class ArchivesSpaceClient {
         HttpGet httpGet = new HttpGet(url);
         httpGet.addHeader("X-ArchivesSpace-Session", sessionToken);
         try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
+            if (response.getStatusLine().getStatusCode() == 404 && url.endsWith("/tree")) {
+                LOGGER.warn("FETCHING " + url + " received a 404, returning null and continuing");
+                return (null);
+            }
             if (response.getStatusLine().getStatusCode() != 200) {
                 throw new RuntimeException("Unable to get " + url + " " + response.getStatusLine().toString());
             }
