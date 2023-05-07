@@ -13,9 +13,13 @@ import org.apache.solr.client.solrj.impl.XMLResponseParser;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+
+import edu.virginia.lib.indexing.tools.IndexRecords;
 
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
@@ -36,14 +40,33 @@ import java.util.regex.Pattern;
  */
 public class SolrHelper {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(SolrHelper.class);
+    
+    private static SolrServer solrserver = null;
+    
+    private static SolrServer getSolrServer(String solrUrl) {
+        if (solrserver == null) {
+            solrserver = new HttpSolrServer(solrUrl);
+        }
+        return solrserver;
+    }
+
     public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query) throws SolrServerException {
-        SolrServer solr = new HttpSolrServer(solrUrl);
+        return getRecordsForQuery(solrUrl, query, null);
+    }
+    
+    public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query, String fieldList) throws SolrServerException {
+        SolrServer solr = getSolrServer(solrUrl);
         ((HttpSolrServer) solr).setParser(new XMLResponseParser());
         int start = 0;
         final ModifiableSolrParams p = new ModifiableSolrParams();
         p.set("q", new String[] { query });
-        p.set("rows", 100);
+        p.set("rows", 5000);
         p.set("start", start);
+        if (fieldList != null) {
+            p.set("fl", fieldList);
+        }
+            
         return new Iterator<SolrDocument>() {
 
             int index = 0;
@@ -52,11 +75,15 @@ public class SolrHelper {
 
             public boolean hasNext() {
                 if (response == null || response.getResults().size() <= index) {
-                    p.set("rows", 100);
+                    p.set("rows", 5000);
                     p.set("start", start);
                     try {
                         response = solr.query(p);
-                        start += response.getResults().size();
+                        int numRetrieved = response.getResults().size();
+                        start += numRetrieved;
+                        if (numRetrieved > 0) {
+                            LOGGER.info("records retrieved from solr : "+ start);
+                        }
                         index = 0;
                     } catch (SolrServerException e) {
                         throw new RuntimeException(e);

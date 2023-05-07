@@ -17,22 +17,34 @@ import javax.json.JsonStructure;
 import javax.json.JsonValue;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ArchivesSpaceClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ArchivesSpaceClient.class);
 
     private String baseUrl;
+    
+    private String solrUrl;
 
     private CloseableHttpClient httpClient;
 
     private String sessionToken;
-
-    public ArchivesSpaceClient(final String baseUrl, final String username, final String password) throws IOException {
+    
+    private Map<String, JsonObject> refCacheMap = null;
+    
+    public ArchivesSpaceClient(final String baseUrl, final String username, final String password, String solrUrl) throws IOException {
         this.baseUrl = baseUrl;
+        this.solrUrl = solrUrl;
         httpClient = HttpClients.createDefault();
         authenticate(username, password);
+    }
+
+    public String getSolrUrl()
+    {
+        return solrUrl;
     }
 
     public List<String> listRepositoryIds() throws IOException {
@@ -60,8 +72,17 @@ public class ArchivesSpaceClient {
     }
 
     public JsonObject resolveReference(final String refId) throws IOException {
+        if (refCacheMap == null) {
+            refCacheMap = new LinkedHashMap<>();
+        }
+        if (refCacheMap.containsKey(refId)) {
+            LOGGER.debug("Already have " + refId);
+            return refCacheMap.get(refId);
+        }
         LOGGER.debug("FETCHING " + refId);
-        return (JsonObject) makeGetRequest(baseUrl + refId);
+        JsonObject result = (JsonObject) makeGetRequest(baseUrl + refId);
+        refCacheMap.put(refId, result);
+        return(result);
     }
 
     private JsonStructure makeGetRequest(final String url) throws IOException {

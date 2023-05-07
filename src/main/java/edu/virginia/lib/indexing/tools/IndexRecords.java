@@ -8,12 +8,12 @@ import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.common.SolrDocument;
 import org.marc4j.MarcStreamWriter;
 import org.marc4j.MarcXmlWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,7 +29,9 @@ import java.util.Set;
  */
 public class IndexRecords {
 
-	public final static String knownBadRefs = " /repositories/7/resources/174 /repositories/3/accessions/1274 /repositories/7/resources/155 "+
+    private static final Logger LOGGER = LoggerFactory.getLogger(IndexRecords.class);
+    
+    public final static String knownBadRefs = " /repositories/7/resources/174 /repositories/3/accessions/1274 /repositories/7/resources/155 "+
 				"/repositories/7/resources/167 /repositories/7/resources/168 /repositories/7/resources/124 /repositories/7/resources/125 ";
     public static void main(String [] args) throws Exception {
         Properties p = new Properties();
@@ -39,7 +41,8 @@ public class IndexRecords {
         ArchivesSpaceClient c = new ArchivesSpaceClient(
                 p.getProperty("archivesSpaceUrl"),
                 p.getProperty("username"),
-                p.getProperty("password"));
+                p.getProperty("password"),
+                p.getProperty("archivesSpaceSolrUrl"));
 
         final String host = p.getProperty("tracksysDbHost");
         final String user = p.getProperty("tracksysDbUsername");
@@ -51,15 +54,15 @@ public class IndexRecords {
         final File output = new File(p.getProperty("indexOutputDir"));
         final File marcOutput = new File(p.getProperty("marcOutputDir"));
         final File marcXmlOutput = new File(p.getProperty("marcXmlOutputDir"));
-        final File logs = new File(p.getProperty("logOutputDir"));
+//        final File logs = new File(p.getProperty("logOutputDir"));
 
         final String solrUrl = p.getProperty("archivesSpaceSolrUrl");
 
-        final File report = new File(logs, new SimpleDateFormat("yyyy-MM-dd-").format(new Date()) + "updated.txt");
-        final PrintWriter published = new PrintWriter(new OutputStreamWriter(new FileOutputStream(report, true)));
+//        final File report = new File(logs, new SimpleDateFormat("yyyy-MM-dd-").format(new Date()) + "updated.txt");
+//        final PrintWriter published = new PrintWriter(new OutputStreamWriter(new FileOutputStream(report, true)));
 
         final long start = System.currentTimeMillis();
-        published.println("Started at " + new Date());
+        LOGGER.info("Started at " + new Date());
 
         int reindexed = 0;
         List<String> errorRefs = new ArrayList<>();
@@ -70,15 +73,14 @@ public class IndexRecords {
             for (String repoRef : repos) {
                 refsToUpdate.addAll(c.listAccessionIds(repoRef));
                 refsToUpdate.addAll(c.listResourceIds(repoRef));
-                published.println(refsToUpdate.size() + " contained accessions and resources will be updated because repository " + repoRef + " was updated.");
+                LOGGER.info(refsToUpdate.size() + " contained accessions and resources will be updated because repository " + repoRef + " was updated.");
             }
             final Set<String> updatedRefs = findUpdatedRecordsToReindex(solrUrl, intervalInHours);
-            published.println(updatedRefs.size() + " accessions and resources had individual updates");
+            LOGGER.info(updatedRefs.size() + " accessions and resources had individual updates");
             refsToUpdate.addAll(updatedRefs);
-            published.println(refsToUpdate.size() + " records to regenerate.");
-            published.flush();
+            LOGGER.info(refsToUpdate.size() + " records to regenerate.");
         } else {
-            published.println("Reindexing items provided on the command line.");
+            LOGGER.info("Reindexing items provided on the command line.");
             for (String arg : args) {
                 refsToUpdate.add(arg);
             }
@@ -100,35 +102,34 @@ public class IndexRecords {
                 if (isSpecialCollections(ref)) {
                     o.writeCirculationRecord(xmlWriter, marcStream);
                 }
-                published.println(ref + ": " + o.getId());
-                published.flush();
+                LOGGER.info(ref + ": " + o.getId());
+                LOGGER.info("--------------------------------------------------------------");
                 reindexed ++;
             } catch (Throwable t) {
-                t.printStackTrace(published);
+                LOGGER.error("", t);
                 if (knownBadRefs.contains(" "+ref+ " ") && t.toString().contains("404 Not Found")) {
-                	published.println(ref + ": skipped due to EXPECTED runtime error " + t.toString());
+                	LOGGER.info(ref + ": skipped due to EXPECTED runtime error " + t.toString());
                 	expectedErrorRefs.add(ref);
                 }
                 else { 
-                	published.println(ref + ": skipped due to runtime error " + t.toString());
+                    LOGGER.error(ref + ": skipped due to runtime error " + t.toString());
                     errorRefs.add(ref);
                 }
             }
         }
         marcStream.close();
         xmlWriter.close();
-        published.println("Completed at " + new Date());
+        LOGGER.info("Completed at " + new Date());
         final long elapsedSeconds = ((System.currentTimeMillis() - start) / 1000);
-        published.println((elapsedSeconds / 60) + " minutes elapsed");
-        published.close();
+        LOGGER.info((elapsedSeconds / 60) + " minutes elapsed");
 
         if (errorRefs.isEmpty() && expectedErrorRefs.isEmpty()) {
-            System.out.println("Updated index and marc records for the " + reindexed + " resources/accessions in ArchivesSpace that changed in the last " + intervalInHours + " hours.");
+            LOGGER.info("Updated index and marc records for the " + reindexed + " resources/accessions in ArchivesSpace that changed in the last " + intervalInHours + " hours.");
         } 
         else {
-            System.err.println(errorRefs.size() + " records resulted in errors, ");
-            System.err.println(expectedErrorRefs.size() + " records resulted in EXPECTED errors, ");
-            System.err.println(reindexed + " other index/marc records updated in responses to changes in the last " + intervalInHours + " hours.");
+            LOGGER.warn(errorRefs.size() + " records resulted in errors, ");
+            LOGGER.warn(expectedErrorRefs.size() + " records resulted in EXPECTED errors, ");
+            LOGGER.warn(reindexed + " other index/marc records updated in responses to changes in the last " + intervalInHours + " hours.");
             if (!errorRefs.isEmpty()) {
             	System.exit(1);
             }
@@ -143,7 +144,7 @@ public class IndexRecords {
 
     private static String getQuery(final int hoursAgo) {
         if (hoursAgo == -1) {
-            System.out.println("hours ago = -1  reindexing all items.");
+            LOGGER.info("hours ago = -1  reindexing all items.");
             return "user_mtime:[* TO NOW]";
         }
         else {
@@ -155,7 +156,8 @@ public class IndexRecords {
     // &fl=id,types,ancestors,linked_instance_uris,related_accession_uris,collection_uri_u_sstr
     private static Set<String> findUpdatedRecordsToReindex(final String solrUrl, int hoursAgo) throws SolrServerException {
         final Set<String> refIds = new HashSet<>();
-        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(hoursAgo));
+        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(hoursAgo) + " AND (types:resource OR types:archival_object OR types:top_container)", 
+                                                                       "types,id,related_accession_uris,ancestors,collection_uri_u_sstr");
         while (updated.hasNext()) {
             SolrDocument d = updated.next();
             if (hasFieldValue(d, TYPES, "resource")) {
@@ -191,7 +193,7 @@ public class IndexRecords {
 
     private static List<String> findUpdatedRepositories(final String solrUrl, int hoursAgo) throws SolrServerException {
         final List<String> refIds = new ArrayList<>();
-        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(hoursAgo) + " AND " + TYPES + ":repository");
+        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(hoursAgo) + " AND " + TYPES + ":repository", "id");
         while (updated.hasNext()) {
             SolrDocument d = updated.next();
             refIds.add((String) d.getFirstValue("id"));

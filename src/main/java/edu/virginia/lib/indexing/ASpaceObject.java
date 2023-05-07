@@ -1,17 +1,21 @@
 package edu.virginia.lib.indexing;
 
 import edu.virginia.lib.indexing.helpers.JsonHelper;
+import edu.virginia.lib.indexing.helpers.SolrHelper;
 import edu.virginia.lib.indexing.helpers.StringNaturalCompare;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.common.SolrDocument;
 import org.marc4j.MarcStreamWriter;
-import org.marc4j.MarcWriter;
 import org.marc4j.MarcXmlWriter;
 import org.marc4j.marc.DataField;
 import org.marc4j.marc.MarcFactory;
 import org.marc4j.marc.Record;
 import org.marc4j.marc.Subfield;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.json.Json;
 import javax.json.JsonArray;
@@ -25,7 +29,6 @@ import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -36,20 +39,19 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Properties;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static edu.virginia.lib.indexing.helpers.JsonHelper.hasValue;
 import static edu.virginia.lib.indexing.helpers.SolrHelper.getIdFromRef;
 import static edu.virginia.lib.indexing.helpers.SolrHelper.getSolrOutputFile;
-import static edu.virginia.lib.indexing.helpers.SolrHelper.isUniqueVirgoId;
-import static edu.virginia.lib.indexing.helpers.UvaHelper.extractManifestUrl;
 import static edu.virginia.lib.indexing.helpers.UvaHelper.normalizeLocation;
 
 /**
@@ -59,6 +61,8 @@ public abstract class ASpaceObject {
 
     final static public String RIGHTS_WRAPPER_URL = "http://rightswrapper2.lib.virginia.edu:8090/rights-wrapper/";
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ASpaceObject.class);
+    
     final static boolean DEBUG = false;
     
     protected ArchivesSpaceClient c;
@@ -73,7 +77,7 @@ public abstract class ASpaceObject {
 
     protected List<ASpaceDigitalObject> digitalObjects;
 
-    private List<ASpaceArchivalObject> children;
+//    private List<ASpaceArchivalObject> children;
 
     public ASpaceObject(ArchivesSpaceClient aspaceClient, final String refId) throws IOException {
         if (!getRefIdPattern().matcher(refId).matches()) {
@@ -87,7 +91,7 @@ public abstract class ASpaceObject {
         if (record == null) {
             try {
                 record = c.resolveReference(refId);
-                if (DEBUG) System.out.println(this.record);
+//                if (DEBUG) System.out.println(this.record);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -123,81 +127,153 @@ public abstract class ASpaceObject {
 
     public abstract boolean isPublished();
 
-    /**
-     * Gets all children (nested components) for this ASpaceObject.  Subclasses that don't/can't
-     * have nested components should return an empty list.
-     */
-    public List<ASpaceArchivalObject> getChildren() throws IOException {
-        if (children == null) {
-            children = new ArrayList<>();
-            final JsonObject treeObj = getTree();
-            if (treeObj != null) {
-                final JsonArray jsonChildren = tree.getJsonArray("children");
-                if (jsonChildren != null) {
-                    for (JsonValue c : jsonChildren) {
-                        final JsonObject child = (JsonObject) c;
-                        children.add(new ASpaceArchivalObject(this.c, child.getString("record_uri"), child));
+//    /**
+//     * Gets all children (nested components) for this ASpaceObject.  Subclasses that don't/can't
+//     * have nested components should return an empty list.
+//     */
+//    public List<ASpaceArchivalObject> getChildren() throws IOException {
+//        if (children == null) {
+//            children = new ArrayList<>();
+//            final JsonObject treeObj = getTree();
+//            if (treeObj != null) {
+//                final JsonArray jsonChildren = tree.getJsonArray("children");
+//                if (jsonChildren != null) {
+//                    for (JsonValue c : jsonChildren) {
+//                        final JsonObject child = (JsonObject) c;
+//                        children.add(new ASpaceArchivalObject(this.c, child.getString("record_uri"), child));
+//                    }
+//                }
+//            }
+//        }
+//        return children;
+//    }
+
+    public List<ASpaceDigitalObject> getDigitalObjects()  {
+        if (digitalObjects == null) {
+            LinkedHashSet<String> digitalObjectsSet = new LinkedHashSet<>();
+            digitalObjects = new ArrayList<>();
+            Iterator<SolrDocument> docs;
+            try {
+                docs = SolrHelper.getRecordsForQuery(c.getSolrUrl(), getDigitalObjectQuery(), "uri,digital_object_uris");
+                while (docs.hasNext()) {
+                    SolrDocument d = docs.next();
+                    Collection<Object> uriobjs =  d.getFieldValues("digital_object_uris");
+                    for (Object uriobj : uriobjs) {
+                        digitalObjectsSet.add(uriobj.toString());
                     }
                 }
-            }
-        }
-        return children;
-    }
-
-    public List<ASpaceDigitalObject> getDigitalObjects() {
-        parseInstances();
-        return digitalObjects;
-    }
-
-    public List<ASpaceTopContainer> getTopContainers() {
-        parseInstances();
-        return containers;
-    }
-
-    private void parseInstances() {
-        if (containers == null || digitalObjects == null) {
-            containers = new ArrayList<>();
-            digitalObjects = new ArrayList<>();
-            try {
-                Set<String> containers = new HashSet<>();
-                Set<String> dos = new HashSet<>();
-                collectInstanceRefs(containers, dos);
-                for (String ref : containers) {
-                    this.containers.add(new ASpaceTopContainer(c, ref));
-                }
-                for (String ref : dos) {
+                for (String ref : digitalObjectsSet) {
                     this.digitalObjects.add(new ASpaceDigitalObject(c, ref));
                 }
-            } catch (IOException e) {
+            }
+            catch (SolrServerException e) {
+                throw new RuntimeException(e);
+            }
+            catch (IOException e)  {
                 throw new RuntimeException(e);
             }
         }
+        return digitalObjects;
     }
 
-    /**
-     * Adds all the container refs and digital object refs for this node to the passed
-     * sets and recurses to the published children.
-     */
-    protected void collectInstanceRefs(final Set<String> containerRefs, Set<String> doRefs) throws IOException {
-        final JsonValue instances = getRecord().get("instances");
-        if (instances != null && instances.getValueType() == JsonValue.ValueType.ARRAY) {
-            for (JsonValue i : (JsonArray) instances) {
-                final JsonObject instance = (JsonObject) i;
-                if (!instance.getString("instance_type").equals("digital_object")) {
-                    containerRefs.add(instance.getJsonObject("sub_container").getJsonObject("top_container").getString("ref"));
-                } else {
-                    doRefs.add(instance.getJsonObject("digital_object").getString("ref"));
+    protected String getDigitalObjectQuery() {
+//      primary_type:"archival_object"  AND 
+//      ancestors:"/repositories/3/resources/488" AND 
+//      repository:"/repositories/3" AND 
+//      digital_object_uris:* AND 
+//      publish:"true"
+        String uri = getRecord().getString("uri");
+        JsonValue repositoryJV = getRecord().get("repository");
+        String repository = null;
+        if (repositoryJV != null && repositoryJV.getValueType() == JsonValue.ValueType.OBJECT) {
+            repository = ((JsonObject)repositoryJV).getString("ref");
+        }
+        String query = "primary_type:\"archival_object\" AND  ancestors:\"" + uri + "\" AND repository:\"" + repository + "\"" +
+                        " AND digital_object_uris:* AND publish:\"true\"";
+        return(query);
+    }
+
+    public List<ASpaceTopContainer> getTopContainers() {
+        if (containers == null) {
+            containers = new ArrayList<>();
+            Iterator<SolrDocument> updated;
+            try {
+                updated = SolrHelper.getRecordsForQuery(c.getSolrUrl(), getTopContainerQuery(), "uri,barcode_u_sstr,display_string,location_uri_u_sstr,collection_identifier_stored_u_sstr");
+                while (updated.hasNext()) {
+                    SolrDocument d = updated.next();
+                    Object uriobj =  d.getFirstValue("uri");
+                    Object barcode = d.getFirstValue("barcode_u_sstr");
+                    String barcodeStr = (barcode != null) ? barcode.toString() : "";
+                    Object containerCallNumber = d.getFirstValue("display_string");
+                    String containerCallNumberStr = containerCallNumber != null ? containerCallNumber.toString() : null;
+                    Object currentLocationRef = d.getFirstValue("location_uri_u_sstr");
+                    String currentLocationRefStr = currentLocationRef != null ? currentLocationRef.toString() : null;
+                    this.containers.add(new ASpaceTopContainer(c, uriobj.toString(), barcodeStr, containerCallNumberStr, currentLocationRefStr));
                 }
             }
-        }
-
-        // recurse to children
-        for (ASpaceArchivalObject child : getChildren()) {
-            if (child.isPublished()) {
-                child.collectInstanceRefs(containerRefs, doRefs);
+            catch (SolrServerException e) {
+                throw new RuntimeException(e);
+            }
+            catch (IOException e)  {
+                throw new RuntimeException(e);
             }
         }
+        return containers;
     }
+
+    private String getTopContainerQuery()
+    {
+//      primary_type:"top_container"  AND  
+//      collection_uri_u_sstr:"/repositories/3/resources/488"
+        String uri = getRecord().getString("uri");
+        String query = "primary_type:\"top_container\" AND  collection_uri_u_sstr:\"" + uri + "\"";
+        return(query);
+    }
+
+//    private void parseInstances() {
+//        if (containers == null || digitalObjects == null) {
+//            containers = new ArrayList<>();
+//            digitalObjects = new ArrayList<>();
+//            try {
+//                Set<String> containers = new HashSet<>();
+//                Set<String> dos = new HashSet<>();
+//                collectInstanceRefs(containers, dos);
+//                for (String ref : containers) {
+//                    this.containers.add(new ASpaceTopContainer(c, ref));
+//                }
+//                for (String ref : dos) {
+//                    this.digitalObjects.add(new ASpaceDigitalObject(c, ref));
+//                }
+//            } catch (IOException e) {
+//                throw new RuntimeException(e);
+//            }
+//        }
+//    }
+
+//    /**
+//     * Adds all the container refs and digital object refs for this node to the passed
+//     * sets and recurses to the published children.
+//     */
+//    protected void collectInstanceRefs(final Set<String> containerRefs, Set<String> doRefs) throws IOException {
+//        final JsonValue instances = getRecord().get("instances");
+//        if (instances != null && instances.getValueType() == JsonValue.ValueType.ARRAY) {
+//            for (JsonValue i : (JsonArray) instances) {
+//                final JsonObject instance = (JsonObject) i;
+//                if (!instance.getString("instance_type").equals("digital_object")) {
+//                    containerRefs.add(instance.getJsonObject("sub_container").getJsonObject("top_container").getString("ref"));
+//                } else {
+//                    doRefs.add(instance.getJsonObject("digital_object").getString("ref"));
+//                }
+//            }
+//        }
+//
+//        // recurse to children
+//        for (ASpaceArchivalObject child : getChildren()) {
+//            if (child.isPublished()) {
+//                child.collectInstanceRefs(containerRefs, doRefs);
+//            }
+//        }
+//    }
 
     public int getLockVersion() {
         return getRecord().getInt("lock_version");
@@ -548,7 +624,7 @@ public abstract class ASpaceObject {
 
         final boolean shadowed = isShadowed();
         addField(xmlOut, "shadowed_location_f", shadowed ? "HIDDEN" : "VISIBLE");
-        System.out.println(shortRefId+" = "+(shadowed ? "HIDDEN" : "VISIBLE"));
+        LOGGER.info(shortRefId+" = "+(shadowed ? "HIDDEN" : "VISIBLE"));
         if (!shadowed) {
 
             // TODO: get this from the data
@@ -687,35 +763,7 @@ public abstract class ASpaceObject {
             }
 
             // Top Containers
-            JsonArrayBuilder containersBuilder = Json.createArrayBuilder();
-            List<ASpaceTopContainer> containers = new ArrayList<>(getTopContainers());
-            // System.err.println("Pre-Sort");
-            // for (ASpaceTopContainer container : containers) {
-            //     System.err.println(container.getContainerCallNumber(getCallNumber()));
-            // }
-            Collections.sort(containers, new Comparator<ASpaceTopContainer>() {
-                @Override
-                public int compare(ASpaceTopContainer o1, ASpaceTopContainer o2) {
-                	StringNaturalCompare comp = new StringNaturalCompare(); 
-                	return comp.compare(o1.getContainerCallNumber(""), o2.getContainerCallNumber(""));
-                }
-            });
-            // System.err.println("Post-Sort");
-            // for (ASpaceTopContainer container : containers) {
-            //     System.err.println(container.getContainerCallNumber(getCallNumber()));
-            // }
-
-            for (ASpaceTopContainer container : containers) {
-                JsonObjectBuilder b = Json.createObjectBuilder();
-                b.add("library", library);
-                b.add("current_location", container.getLocation());
-                b.add("call_number", container.getContainerCallNumber(getCallNumber()));
-                b.add("barcode", container.getBarcode());
-                b.add("special_collections_location", container.getCurrentLocation());
-                containersBuilder.add(b.build());
-            }
-            addField(xmlOut, "sc_availability_large_single", containersBuilder.build().toString());
-
+            addAvailabilityInfo(xmlOut, library);
 
             // Digital Objects
             int manifestsIncluded = 0;
@@ -807,9 +855,17 @@ public abstract class ASpaceObject {
                             }
                             else if (noteType.equals("acqinfo"))
                             {
-                            	addField(xmlOut, "note_tsearch_stored", noteText);
+                                addField(xmlOut, "note_tsearch_stored", noteText);
                             }
-                            else
+                            else if (noteType.equals("custodhist"))
+                            {
+                                addField(xmlOut, "note_tsearch_stored", noteText);
+                            }
+                            else if (noteType.equals("physloc"))
+                            {
+                                addField(xmlOut, "note_tsearch_stored", noteText);
+                            }
+                            else  // physdesc    odd   processinfo   relatedmaterial   userestrict    separatedmaterial
                             {
                             	noteType = "unknown";
                             }
@@ -841,6 +897,43 @@ public abstract class ASpaceObject {
 
         return outputFile;
 
+    }
+
+    void addAvailabilityInfo(XMLStreamWriter xmlOut, String library) throws IOException, XMLStreamException {
+        // Top Containers
+        JsonArrayBuilder containersBuilder = Json.createArrayBuilder();
+        List<ASpaceTopContainer> containers = new ArrayList<>(getTopContainers());
+        // System.err.println("Pre-Sort");
+        // for (ASpaceTopContainer container : containers) {
+        //     System.err.println(container.getContainerCallNumber(getCallNumber()));
+        // }
+        Collections.sort(containers, new Comparator<ASpaceTopContainer>() {
+            @Override
+            public int compare(ASpaceTopContainer o1, ASpaceTopContainer o2) {
+                StringNaturalCompare comp = new StringNaturalCompare(); 
+                return comp.compare(o1.getContainerCallNumber(""), o2.getContainerCallNumber(""));
+            }
+        });
+        // System.err.println("Post-Sort");
+        // for (ASpaceTopContainer container : containers) {
+        //     System.err.println(container.getContainerCallNumber(getCallNumber()));
+        // }
+    
+        for (ASpaceTopContainer container : containers) {
+            JsonObjectBuilder b = Json.createObjectBuilder();
+            b.add("library", library);
+            String currentLocation = container.getCurrentLocation();
+            String location = container.getLocation();
+            if (location.equals("STACKS") && currentLocation.startsWith("SC-Ivy")) {
+                location = "SC-IVY";
+            }
+            b.add("current_location", location);
+            b.add("call_number", container.getContainerCallNumber(getCallNumber()));
+            b.add("barcode", container.getBarcode());
+            b.add("special_collections_location", currentLocation);
+            containersBuilder.add(b.build());
+        }
+        addField(xmlOut, "sc_availability_large_single", containersBuilder.build().toString());
     }
 
     private JsonArray dedupeContainerArray(JsonArray containers) {

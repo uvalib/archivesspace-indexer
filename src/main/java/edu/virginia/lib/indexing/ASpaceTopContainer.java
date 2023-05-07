@@ -5,7 +5,9 @@ import javax.json.JsonObject;
 import javax.json.JsonValue;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -15,12 +17,29 @@ import java.util.regex.Pattern;
  *
  * Created by md5wz on 6/14/18.
  */
-public class ASpaceTopContainer extends ASpaceObject {
-
+public class ASpaceTopContainer extends ASpaceObject {    
+    private String containerCallNumber;
+    private String barcode;
     private String location;
+    private String locationRef;    
 
     public ASpaceTopContainer(ArchivesSpaceClient client, String refId) throws IOException {
         super(client, refId);
+        barcode = null;
+        containerCallNumber = null;
+        locationRef = null;
+    }
+
+    public ASpaceTopContainer(ArchivesSpaceClient client, String refId, String barcodeStr, String containerCallnumber, String currentLocationRef) throws IOException {
+        super(client, refId);
+        barcode = barcodeStr;
+        this.containerCallNumber = containerCallnumber;
+        locationRef = currentLocationRef != null ? currentLocationRef : "";
+    }
+
+    @Override
+    protected JsonObject getRecord() {
+        return super.getRecord();
     }
 
     /**
@@ -51,26 +70,40 @@ public class ASpaceTopContainer extends ASpaceObject {
      * container belongs.
      */
     public String getContainerCallNumber(final String owningCallNumber) {
-        return owningCallNumber + " " + getRecord().getString("display_string");
+        if (containerCallNumber == null) {
+            containerCallNumber = getRecord().getString("display_string");
+        }
+        return owningCallNumber + " " + containerCallNumber;
     }
-
+  
     /**
      * Gets the current location.
+     * @throws IOException 
      */
     public String getCurrentLocation() throws IOException {
         if (location == null) {
-            JsonArray loc = getRecord().getJsonArray("container_locations");
-            for (JsonValue v : loc) {
-                JsonObject l = (JsonObject) v;
-                if (l.getString("status").equals("current")) {
-                    location = c.resolveReference(l.getString("ref")).getString("title");
+            if (locationRef == null) {
+                JsonArray loc = getRecord().getJsonArray("container_locations");
+                for (JsonValue v : loc) {
+                    JsonObject l = (JsonObject) v;
+                    if (l.getString("status").equals("current")) {
+                        locationRef = l.getString("ref");
+                    }
                 }
             }
+            if (locationRef != null && !locationRef.equals("")) {
+                location = getLocationTitle(locationRef);
+            }
             if (location == null) {
-                return "";
+                location = "";
             }
         }
         return location;
+    }
+
+    private String getLocationTitle(String locationRef) throws IOException {
+        location = c.resolveReference(locationRef).getString("title");
+        return(location);
     }
 
     /**
@@ -78,25 +111,30 @@ public class ASpaceTopContainer extends ASpaceObject {
      * derived from the top container reference id.
      */
     public String getBarcode() {
-        JsonValue barcode = getRecord().get("barcode");
-        if (barcode != null) {
-            return getRecord().getString("barcode");
-        } else {
-            Matcher m = Pattern.compile("/repositories/(\\d+)/top_containers/(\\d+)").matcher(getRecord().getString("uri"));
-            if (m.matches()) {
-                return "AS:" + m.group(1) + "C" + m.group(2);
-            } else {
-                return "UNKNOWN";
-            }
+        if (this.barcode != null && !this.barcode.equals("")) {
+            return this.barcode;
         }
+        if (this.barcode == null) {
+            JsonValue barcodeJV = getRecord().get("barcode");
+            if (barcodeJV != null) {
+                barcode = getRecord().getString("barcode");
+            } 
+        }
+        Matcher m = Pattern.compile("/repositories/(\\d+)/top_containers/(\\d+)").matcher(this.refId);
+        if (m.matches()) {
+            barcode = "AS:" + m.group(1) + "C" + m.group(2);
+        } else {
+            barcode = "UNKNOWN";
+        }
+        return (barcode);
     }
 
     public String getLocation() {
-        JsonValue room = getRecord().get("room");
-        if (room == null) {
+//        JsonValue room = getRecord().get("room");
+//        if (room == null) {
             return "STACKS";
-        } else {
-            return room.toString();
-        }
+//        } else {
+//            return room.toString();
+//        }
     }
 }
