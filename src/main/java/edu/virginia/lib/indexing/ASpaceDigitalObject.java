@@ -1,12 +1,14 @@
 package edu.virginia.lib.indexing;
 
-import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static edu.virginia.lib.indexing.helpers.UvaHelper.extractManifestUrl;
@@ -16,6 +18,8 @@ import static edu.virginia.lib.indexing.helpers.UvaHelper.extractManifestUrl;
  * data from the underlying json model.
  */
 public class ASpaceDigitalObject extends ASpaceObject {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ASpaceDigitalObject.class);
 
     public ASpaceDigitalObject(ArchivesSpaceClient client, String refId) throws IOException {
         super(client, refId);
@@ -51,7 +55,7 @@ public class ASpaceDigitalObject extends ASpaceObject {
                     return extractManifestUrl(ver.getString("file_uri"));
                 }
             } catch (Throwable t) {
-                System.out.println("Skipping digital content, likely because no use_statement.");
+                LOGGER.warn("Skipping digital content, likely because no use_statement.");
                 return null;
             }
         }
