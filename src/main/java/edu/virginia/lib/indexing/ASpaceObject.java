@@ -183,13 +183,19 @@ public abstract class ASpaceObject {
 //      digital_object_uris:* AND 
 //      publish:"true"
         String uri = getRecord().getString("uri");
-        JsonValue repositoryJV = getRecord().get("repository");
-        String repository = null;
-        if (repositoryJV != null && repositoryJV.getValueType() == JsonValue.ValueType.OBJECT) {
-            repository = ((JsonObject)repositoryJV).getString("ref");
+        String query = "";
+        if (uri.contains("resources")) {
+            JsonValue repositoryJV = getRecord().get("repository");
+            String repository = null;
+            if (repositoryJV != null && repositoryJV.getValueType() == JsonValue.ValueType.OBJECT) {
+                repository = ((JsonObject)repositoryJV).getString("ref");
+            }
+            query = "primary_type:\"archival_object\" AND  ancestors:\"" + uri + "\" AND repository:\"" + repository + "\"" +
+                            " AND digital_object_uris:* AND publish:\"true\"";
         }
-        String query = "primary_type:\"archival_object\" AND  ancestors:\"" + uri + "\" AND repository:\"" + repository + "\"" +
-                        " AND digital_object_uris:* AND publish:\"true\"";
+        else if (uri.contains("accessions")) {
+            query = "id:\""+uri+"\" AND publish:\"true\"";
+        }
         return(query);
     }
 
