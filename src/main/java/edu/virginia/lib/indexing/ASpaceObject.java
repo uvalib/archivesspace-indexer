@@ -158,8 +158,10 @@ public abstract class ASpaceObject {
                 while (docs.hasNext()) {
                     SolrDocument d = docs.next();
                     Collection<Object> uriobjs =  d.getFieldValues("digital_object_uris");
-                    for (Object uriobj : uriobjs) {
-                        digitalObjectsSet.add(uriobj.toString());
+                    if (uriobjs !=  null && uriobjs.size() > 0) {
+                        for (Object uriobj : uriobjs) {
+                            digitalObjectsSet.add(uriobj.toString());
+                        }
                     }
                 }
                 for (String ref : digitalObjectsSet) {
@@ -194,7 +196,7 @@ public abstract class ASpaceObject {
                             " AND digital_object_uris:* AND publish:\"true\"";
         }
         else if (uri.contains("accessions")) {
-            query = "id:\""+uri+"\" AND publish:\"true\"";
+            query = "id:\""+uri+"\" AND digital_object_uris:* AND publish:\"true\"";
         }
         return(query);
     }
