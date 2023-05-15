@@ -46,6 +46,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -76,8 +77,12 @@ public abstract class ASpaceObject {
     protected List<ASpaceTopContainer> containers;
 
     protected List<ASpaceDigitalObject> digitalObjects;
+    
+    protected List<ASpaceTopContainer> containersTree;
 
-//    private List<ASpaceArchivalObject> children;
+    protected List<ASpaceDigitalObject> digitalObjectsTree;
+
+    private List<ASpaceArchivalObject> children;
 
     public ASpaceObject(ArchivesSpaceClient aspaceClient, final String refId) throws IOException {
         if (!getRefIdPattern().matcher(refId).matches()) {
@@ -127,28 +132,30 @@ public abstract class ASpaceObject {
 
     public abstract boolean isPublished();
 
-//    /**
-//     * Gets all children (nested components) for this ASpaceObject.  Subclasses that don't/can't
-//     * have nested components should return an empty list.
-//     */
-//    public List<ASpaceArchivalObject> getChildren() throws IOException {
-//        if (children == null) {
-//            children = new ArrayList<>();
-//            final JsonObject treeObj = getTree();
-//            if (treeObj != null) {
-//                final JsonArray jsonChildren = tree.getJsonArray("children");
-//                if (jsonChildren != null) {
-//                    for (JsonValue c : jsonChildren) {
-//                        final JsonObject child = (JsonObject) c;
-//                        children.add(new ASpaceArchivalObject(this.c, child.getString("record_uri"), child));
-//                    }
-//                }
-//            }
-//        }
-//        return children;
-//    }
+    /**
+     * Gets all children (nested components) for this ASpaceObject.  Subclasses that don't/can't
+     * have nested components should return an empty list.
+     */
+    public List<ASpaceArchivalObject> getChildren() throws IOException {
+        if (children == null) {
+            children = new ArrayList<>();
+            final JsonObject treeObj = getTree();
+            if (treeObj != null) {
+                final JsonArray jsonChildren = tree.getJsonArray("children");
+                if (jsonChildren != null) {
+                    for (JsonValue c : jsonChildren) {
+                        final JsonObject child = (JsonObject) c;
+                        children.add(new ASpaceArchivalObject(this.c, child.getString("record_uri"), child));
+                    }
+                }
+            }
+        }
+        return children;
+    }
 
     public List<ASpaceDigitalObject> getDigitalObjects()  {
+        parseInstances();
+
         if (digitalObjects == null) {
             LinkedHashSet<String> digitalObjectsSet = new LinkedHashSet<>();
             digitalObjects = new ArrayList<>();
@@ -174,6 +181,10 @@ public abstract class ASpaceObject {
             catch (IOException e)  {
                 throw new RuntimeException(e);
             }
+        }
+        
+        if (digitalObjects.size() != digitalObjects.size()) {
+            LOGGER.warn("different count of digitalObjects");
         }
         return digitalObjects;
     }
@@ -202,6 +213,8 @@ public abstract class ASpaceObject {
     }
 
     public List<ASpaceTopContainer> getTopContainers() {
+        parseInstances();
+
         if (containers == null) {
             containers = new ArrayList<>();
             Iterator<SolrDocument> updated;
@@ -226,6 +239,10 @@ public abstract class ASpaceObject {
                 throw new RuntimeException(e);
             }
         }
+        if (containers.size() != containersTree.size()) {
+            LOGGER.warn("different count of containers");
+        }
+            
         return containers;
     }
 
@@ -234,54 +251,54 @@ public abstract class ASpaceObject {
 //      primary_type:"top_container"  AND  
 //      collection_uri_u_sstr:"/repositories/3/resources/488"
         String uri = getRecord().getString("uri");
-        String query = "primary_type:\"top_container\" AND  collection_uri_u_sstr:\"" + uri + "\"";
+        String query = "primary_type:\"top_container\" AND  collection_uri_u_sstr:\"" + uri + "\" AND publish:\"true\"";
         return(query);
     }
 
-//    private void parseInstances() {
-//        if (containers == null || digitalObjects == null) {
-//            containers = new ArrayList<>();
-//            digitalObjects = new ArrayList<>();
-//            try {
-//                Set<String> containers = new HashSet<>();
-//                Set<String> dos = new HashSet<>();
-//                collectInstanceRefs(containers, dos);
-//                for (String ref : containers) {
-//                    this.containers.add(new ASpaceTopContainer(c, ref));
-//                }
-//                for (String ref : dos) {
-//                    this.digitalObjects.add(new ASpaceDigitalObject(c, ref));
-//                }
-//            } catch (IOException e) {
-//                throw new RuntimeException(e);
-//            }
-//        }
-//    }
+    private void parseInstances() {
+        if (containersTree == null || digitalObjectsTree == null) {
+            containersTree = new ArrayList<>();
+            digitalObjectsTree = new ArrayList<>();
+            try {
+                Set<String> containers = new HashSet<>();
+                Set<String> dos = new HashSet<>();
+                collectInstanceRefs(containers, dos);
+                for (String ref : containers) {
+                    this.containersTree.add(new ASpaceTopContainer(c, ref));
+                }
+                for (String ref : dos) {
+                    this.digitalObjectsTree.add(new ASpaceDigitalObject(c, ref));
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
 
-//    /**
-//     * Adds all the container refs and digital object refs for this node to the passed
-//     * sets and recurses to the published children.
-//     */
-//    protected void collectInstanceRefs(final Set<String> containerRefs, Set<String> doRefs) throws IOException {
-//        final JsonValue instances = getRecord().get("instances");
-//        if (instances != null && instances.getValueType() == JsonValue.ValueType.ARRAY) {
-//            for (JsonValue i : (JsonArray) instances) {
-//                final JsonObject instance = (JsonObject) i;
-//                if (!instance.getString("instance_type").equals("digital_object")) {
-//                    containerRefs.add(instance.getJsonObject("sub_container").getJsonObject("top_container").getString("ref"));
-//                } else {
-//                    doRefs.add(instance.getJsonObject("digital_object").getString("ref"));
-//                }
-//            }
-//        }
-//
-//        // recurse to children
-//        for (ASpaceArchivalObject child : getChildren()) {
-//            if (child.isPublished()) {
-//                child.collectInstanceRefs(containerRefs, doRefs);
-//            }
-//        }
-//    }
+    /**
+     * Adds all the container refs and digital object refs for this node to the passed
+     * sets and recurses to the published children.
+     */
+    protected void collectInstanceRefs(final Set<String> containerRefs, Set<String> doRefs) throws IOException {
+        final JsonValue instances = getRecord().get("instances");
+        if (instances != null && instances.getValueType() == JsonValue.ValueType.ARRAY) {
+            for (JsonValue i : (JsonArray) instances) {
+                final JsonObject instance = (JsonObject) i;
+                if (!instance.getString("instance_type").equals("digital_object")) {
+                    containerRefs.add(instance.getJsonObject("sub_container").getJsonObject("top_container").getString("ref"));
+                } else {
+                    doRefs.add(instance.getJsonObject("digital_object").getString("ref"));
+                }
+            }
+        }
+
+        // recurse to children
+        for (ASpaceArchivalObject child : getChildren()) {
+            if (child.isPublished()) {
+                child.collectInstanceRefs(containerRefs, doRefs);
+            }
+        }
+    }
 
     public int getLockVersion() {
         return getRecord().getInt("lock_version");

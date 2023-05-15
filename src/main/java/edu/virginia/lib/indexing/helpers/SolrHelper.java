@@ -81,7 +81,7 @@ public class SolrHelper {
                         response = solr.query(p);
                         int numRetrieved = response.getResults().size();
                         start += numRetrieved;
-                        if (numRetrieved > 0) {
+                        if (numRetrieved > 0 || start == 0) {
                             LOGGER.info("records retrieved from solr : "+ start);
                         }
                         index = 0;

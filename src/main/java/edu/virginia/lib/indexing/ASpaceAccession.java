@@ -40,7 +40,7 @@ public class ASpaceAccession extends ASpaceObject {
         boolean hasPublishedCollectionRecord = hasPublishedCollectionRecord();
         LOGGER.debug("isPublished = "+published);
         LOGGER.debug("hasPublishedCollectionRecord = "+hasPublishedCollectionRecord);
-        boolean visible = published && hasPublishedCollectionRecord;
+        boolean visible = published && ! hasPublishedCollectionRecord;
         LOGGER.debug("isShadowed = "+ !(visible));
         return !(visible);
     }
