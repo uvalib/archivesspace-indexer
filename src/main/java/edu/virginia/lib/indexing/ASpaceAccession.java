@@ -59,6 +59,7 @@ public class ASpaceAccession extends ASpaceObject {
         if (relatedResources.size() == 0) {
             return false;
         }
+        String uri = getRecord().getString("uri");
         for (JsonValue v : relatedResources) {
             ASpaceCollection col = new ASpaceCollection(c, ((JsonObject) v).getString("ref"));
             if (col.isPublished()) {

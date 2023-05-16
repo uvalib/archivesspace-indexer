@@ -96,9 +96,9 @@ public class IndexRecords {
                 if (v3Orv4.contentEquals("v4")) {
                 	o.generateV4SolrAddDoc(output, host, user, pass);
                 }
-                else {
-                	o.generateSolrAddDoc(output, host, user, pass);
-                }
+//                else {
+//                    o.generateSolrAddDoc(output, host, user, pass);
+//                }
                 if (isSpecialCollections(ref)) {
                     o.writeCirculationRecord(xmlWriter, marcStream);
                 }
