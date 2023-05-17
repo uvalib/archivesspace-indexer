@@ -176,6 +176,14 @@ public abstract class ASpaceObject {
                             digitalObjectsSet.add(uriobj.toString());
                         }
                     }
+                    Collection<Object> uri =  d.getFieldValues("uri");
+                    if (uri !=  null && uri.size() > 0) {
+                        for (Object u : uri) {
+                            if (u.toString().contains("digital_objects")) {
+                                digitalObjectsSet.add(u.toString());
+                            }
+                        }
+                    }
                 }
                 for (String ref : digitalObjectsSet) {
                     this.digitalObjectsSolr.add(new ASpaceDigitalObject(c, ref));
@@ -190,7 +198,25 @@ public abstract class ASpaceObject {
         }
         
         if (digitalObjectsSolr.size() != digitalObjectsTree.size()) {
-            LOGGER.warn("different count of digitalObjects");
+            LOGGER.warn(">>>>>>> different count of digitalObjects: solr = "+ digitalObjectsSolr.size()+
+                    "  tree = " + digitalObjectsTree.size()+ " <<<<<<<<<<");
+        }
+        else { 
+            boolean gotEmAll = true;
+            Set<String> tcSet = new LinkedHashSet<>();
+            for (ASpaceDigitalObject astc : digitalObjectsSolr) {
+                String ref = astc.getId();
+                tcSet.add(ref);
+            }
+            for (ASpaceDigitalObject astt : digitalObjectsTree) {
+                String ref = astt.getId();
+                if (!tcSet.contains(ref)) {
+                    gotEmAll = false;
+                }
+            }
+            if (! gotEmAll ) {
+                LOGGER.warn(">>>>>>>>>>>>>>>>>>>>>>>>>> different list of digitalObjects <<<<<<<<<<<<<<<<<<<<<<<<<<<");
+            }
         }
         digitalObjects = digitalObjectsTree;
         
@@ -211,8 +237,8 @@ public abstract class ASpaceObject {
             if (repositoryJV != null && repositoryJV.getValueType() == JsonValue.ValueType.OBJECT) {
                 repository = ((JsonObject)repositoryJV).getString("ref");
             }
-            query = "primary_type:\"archival_object\" AND  ancestors:\"" + uri + "\" AND repository:\"" + repository + "\"" +
-                            " AND digital_object_uris:* AND publish:\"true\"";
+            query = "(primary_type:\"archival_object\" AND  ancestors:\"" + uri + "\" AND repository:\"" + repository + "\"" +
+                            " AND digital_object_uris:* AND publish:\"true\") OR (primary_type:\"digital_object\" AND linked_instance_uris:\""+uri+"\")";
         }
         else if (uri.contains("accessions")) {
             query = "id:\""+uri+"\" AND digital_object_uris:* AND publish:\"true\"";
@@ -249,16 +275,14 @@ public abstract class ASpaceObject {
             }
         }
         if (containersSolr.size() != containersTree.size()) {
-            LOGGER.warn(">>>>>>>>>>>>>>>>>>>>>>>>>> different count of containers <<<<<<<<<<<<<<<<<<<<<<<<<<<");
-//            containersTree = null;
-//            children = null;
-//            parseInstances();
+            LOGGER.warn(">>>>>>> different count of containers: solr = "+ containersSolr.size()+
+                    "  tree = " + containersTree.size()+ " <<<<<<<<<<");
         }
         else { 
-            boolean gotEmAll = true; 
+            boolean gotEmAll = true;
             Set<String> tcSet = new LinkedHashSet<>();
             for (ASpaceTopContainer astc : containersSolr) {
-                String ref = astc.getId(); 
+                String ref = astc.getId();
                 tcSet.add(ref);
             }
             for (ASpaceTopContainer astt : containersTree) {
@@ -283,7 +307,7 @@ public abstract class ASpaceObject {
         String uri = getRecord().getString("uri");
         String query = "";
         if (topRefid.contains("resources")) {
-            query = "primary_type:\"top_container\" AND  collection_uri_u_sstr:\"" + uri + "\" AND publish:\"true\"";
+            query = "primary_type:\"top_container\" AND  collection_uri_u_sstr:\"" + uri + "\"";
         }
         else if (topRefid.contains("accessions")) {
             query = "primary_type:\"top_container\" AND  collection_uri_u_sstr:\"" + uri + "\"";

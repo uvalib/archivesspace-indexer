@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -67,7 +68,7 @@ public class IndexRecords {
         int reindexed = 0;
         List<String> errorRefs = new ArrayList<>();
         List<String> expectedErrorRefs = new ArrayList<>();
-        final Set<String> refsToUpdate = new HashSet<>();
+        final Set<String> refsToUpdate = new LinkedHashSet<>();
         if (args.length == 0) {
             List<String> repos = findUpdatedRepositories(solrUrl, intervalInHours);
             for (String repoRef : repos) {
