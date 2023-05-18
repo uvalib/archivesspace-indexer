@@ -1021,7 +1021,12 @@ public abstract class ASpaceObject {
             @Override
             public int compare(ASpaceTopContainer o1, ASpaceTopContainer o2) {
                 StringNaturalCompare comp = new StringNaturalCompare(); 
-                return comp.compare(o1.getContainerCallNumber(""), o2.getContainerCallNumber(""));
+                int result = comp.compare(o1.getContainerCallNumber(""), o2.getContainerCallNumber(""));
+                if (result != 0) return (result);
+                result = comp.compare(o1.getBarcode(), o2.getBarcode());
+                if (result != 0) return (result);
+                result = comp.compare(o1.getId(), o2.getId());
+                return(result);
             }
         });
         // System.err.println("Post-Sort");
