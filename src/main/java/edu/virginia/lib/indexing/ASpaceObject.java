@@ -3,6 +3,8 @@ package edu.virginia.lib.indexing;
 import edu.virginia.lib.indexing.helpers.JsonHelper;
 import edu.virginia.lib.indexing.helpers.SolrHelper;
 import edu.virginia.lib.indexing.helpers.StringNaturalCompare;
+import edu.virginia.lib.indexing.tools.IndexRecords;
+
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.HttpClients;
@@ -160,7 +162,9 @@ public abstract class ASpaceObject {
     }
 
     public List<ASpaceDigitalObject> getDigitalObjects()  {
-        parseInstances();
+        if (IndexRecords.debugUse != null) {
+            parseInstances();
+        }
 
         if (digitalObjectsSolr == null) {
             LinkedHashSet<String> digitalObjectsSet = new LinkedHashSet<>();
@@ -197,29 +201,37 @@ public abstract class ASpaceObject {
             }
         }
         
-        if (digitalObjectsSolr.size() != digitalObjectsTree.size()) {
-            LOGGER.warn(">>>>>>> different count of digitalObjects: solr = "+ digitalObjectsSolr.size()+
-                    "  tree = " + digitalObjectsTree.size()+ " <<<<<<<<<<");
-        }
-        else { 
-            boolean gotEmAll = true;
-            Set<String> tcSet = new LinkedHashSet<>();
-            for (ASpaceDigitalObject astc : digitalObjectsSolr) {
-                String ref = astc.getId();
-                tcSet.add(ref);
+        if (IndexRecords.debugUse != null) {
+            if (digitalObjectsSolr.size() != digitalObjectsTree.size()) {
+                LOGGER.warn(">>>>>>> different count of digitalObjects: solr = "+ digitalObjectsSolr.size()+
+                        "  tree = " + digitalObjectsTree.size()+ " <<<<<<<<<<");
             }
-            for (ASpaceDigitalObject astt : digitalObjectsTree) {
-                String ref = astt.getId();
-                if (!tcSet.contains(ref)) {
-                    gotEmAll = false;
+            else { 
+                boolean gotEmAll = true;
+                Set<String> tcSet = new LinkedHashSet<>();
+                for (ASpaceDigitalObject astc : digitalObjectsSolr) {
+                    String ref = astc.getId();
+                    tcSet.add(ref);
+                }
+                for (ASpaceDigitalObject astt : digitalObjectsTree) {
+                    String ref = astt.getId();
+                    if (!tcSet.contains(ref)) {
+                        gotEmAll = false;
+                    }
+                }
+                if (! gotEmAll ) {
+                    LOGGER.warn(">>>>>>>>>>>>>>>>>>>>>>>>>> different list of digitalObjects <<<<<<<<<<<<<<<<<<<<<<<<<<<");
                 }
             }
-            if (! gotEmAll ) {
-                LOGGER.warn(">>>>>>>>>>>>>>>>>>>>>>>>>> different list of digitalObjects <<<<<<<<<<<<<<<<<<<<<<<<<<<");
-            }
         }
-        digitalObjects = digitalObjectsTree;
         
+        if (IndexRecords.debugUse == null || IndexRecords.debugUse.equals("solr")) {
+            digitalObjects = digitalObjectsSolr;
+        }
+        else {
+            digitalObjects = digitalObjectsTree;
+        }
+       
         return digitalObjects;
     }
 
@@ -247,7 +259,9 @@ public abstract class ASpaceObject {
     }
 
     public List<ASpaceTopContainer> getTopContainers() {
-        parseInstances();
+        if (IndexRecords.debugUse != null) {
+            parseInstances();
+        }
         String query = getTopContainerQuery();
 
         if (containersSolr == null) {
@@ -274,29 +288,37 @@ public abstract class ASpaceObject {
                 throw new RuntimeException(e);
             }
         }
-        if (containersSolr.size() != containersTree.size()) {
-            LOGGER.warn(">>>>>>> different count of containers: solr = "+ containersSolr.size()+
-                    "  tree = " + containersTree.size()+ " <<<<<<<<<<");
-        }
-        else { 
-            boolean gotEmAll = true;
-            Set<String> tcSet = new LinkedHashSet<>();
-            for (ASpaceTopContainer astc : containersSolr) {
-                String ref = astc.getId();
-                tcSet.add(ref);
+        if (IndexRecords.debugUse != null) {
+            if (containersSolr.size() != containersTree.size()) {
+                LOGGER.warn(">>>>>>> different count of containers: solr = "+ containersSolr.size()+
+                        "  tree = " + containersTree.size()+ " <<<<<<<<<<");
             }
-            for (ASpaceTopContainer astt : containersTree) {
-                String ref = astt.getId();
-                if (!tcSet.contains(ref)) {
-                    gotEmAll = false;
+            else { 
+                boolean gotEmAll = true;
+                Set<String> tcSet = new LinkedHashSet<>();
+                for (ASpaceTopContainer astc : containersSolr) {
+                    String ref = astc.getId();
+                    tcSet.add(ref);
+                }
+                for (ASpaceTopContainer astt : containersTree) {
+                    String ref = astt.getId();
+                    if (!tcSet.contains(ref)) {
+                        gotEmAll = false;
+                    }
+                }
+                if (! gotEmAll ) {
+                    LOGGER.warn(">>>>>>>>>>>>>>>>>>>>>>>>>> different list of containers <<<<<<<<<<<<<<<<<<<<<<<<<<<");
                 }
             }
-            if (! gotEmAll ) {
-                LOGGER.warn(">>>>>>>>>>>>>>>>>>>>>>>>>> different list of containers <<<<<<<<<<<<<<<<<<<<<<<<<<<");
-            }
+        }
+                
+        if (IndexRecords.debugUse == null || IndexRecords.debugUse.equals("solr")) {
+            containers = containersSolr;
+        }
+        else {
+            containers = containersTree;
         }
             
-        containers = containersTree;
         return(containers);
     }
 
@@ -853,8 +875,9 @@ public abstract class ASpaceObject {
 
             // Digital Objects
             int manifestsIncluded = 0;
-            if (getDigitalObjects().size() <= 5) {
-                for (ASpaceDigitalObject digitalObject : getDigitalObjects()) {
+            List<ASpaceDigitalObject> digitalObjects = getDigitalObjects();
+            if (digitalObjects.size() <= 5) {
+                for (ASpaceDigitalObject digitalObject : digitalObjects) {
                     if (digitalObject.getIIIFURL() != null) {
                         try {
                         	addDigitalImagesV4(digitalObject.getIIIFURL(), xmlOut, manifestsIncluded == 0, dbHost, dbUser, dbPassword);
