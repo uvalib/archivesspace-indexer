@@ -120,7 +120,7 @@ public class ASpaceTopContainer extends ASpaceObject {
                 barcode = getRecord().getString("barcode");
             } 
         }
-        if (this.barcode == null) {
+        if (this.barcode == null || this.barcode.equals("")) {
             Matcher m = Pattern.compile("/repositories/(\\d+)/top_containers/(\\d+)").matcher(this.refId);
             if (m.matches()) {
                 barcode = "AS:" + m.group(1) + "C" + m.group(2);
