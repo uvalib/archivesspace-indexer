@@ -118,7 +118,10 @@ public class ASpaceTopContainer extends ASpaceObject {
             JsonValue barcodeJV = getRecord().get("barcode");
             if (barcodeJV != null) {
                 barcode = getRecord().getString("barcode");
-            } 
+            }
+            if (barcode != null) {
+                barcode = barcode.trim();
+            }
         }
         if (this.barcode == null || this.barcode.equals("")) {
             Matcher m = Pattern.compile("/repositories/(\\d+)/top_containers/(\\d+)").matcher(this.refId);
