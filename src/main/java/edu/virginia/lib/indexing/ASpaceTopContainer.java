@@ -71,7 +71,7 @@ public class ASpaceTopContainer extends ASpaceObject {
      */
     public String getContainerCallNumber(final String owningCallNumber) {
         if (containerCallNumber == null) {
-            containerCallNumber = getRecord().getString("display_string");
+            containerCallNumber = getRecord().getString("display_string").trim();
         }
         return owningCallNumber + " " + containerCallNumber;
     }

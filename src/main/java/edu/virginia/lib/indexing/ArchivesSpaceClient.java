@@ -10,6 +10,8 @@ import org.apache.http.impl.client.HttpClients;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.virginia.lib.indexing.tools.IndexRecords;
+
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
@@ -72,16 +74,20 @@ public class ArchivesSpaceClient {
     }
 
     public JsonObject resolveReference(final String refId) throws IOException {
-        if (refCacheMap == null) {
-            refCacheMap = new LinkedHashMap<>();
+        if (IndexRecords.debugUse == null) {
+            if (refCacheMap == null) {
+                refCacheMap = new LinkedHashMap<>();
+            }
         }
-        if (refCacheMap.containsKey(refId)) {
+        if (refCacheMap != null && refCacheMap.containsKey(refId)) {
             LOGGER.debug("Already have " + refId);
             return refCacheMap.get(refId);
         }
         LOGGER.debug("FETCHING " + refId);
         JsonObject result = (JsonObject) makeGetRequest(baseUrl + refId);
-        refCacheMap.put(refId, result);
+        if (refCacheMap != null) {
+            refCacheMap.put(refId, result);
+        }
         return(result);
     }
 
