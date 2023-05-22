@@ -3,6 +3,8 @@ package edu.virginia.lib.indexing;
 import edu.virginia.lib.indexing.helpers.JsonHelper;
 import edu.virginia.lib.indexing.helpers.SolrHelper;
 import edu.virginia.lib.indexing.helpers.StringNaturalCompare;
+import edu.virginia.lib.indexing.tools.IndexRecords;
+
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.HttpClients;
@@ -46,6 +48,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -65,6 +68,8 @@ public abstract class ASpaceObject {
     
     final static boolean DEBUG = false;
     
+    protected static String topRefid = "";
+    
     protected ArchivesSpaceClient c;
 
     protected String refId;
@@ -76,8 +81,16 @@ public abstract class ASpaceObject {
     protected List<ASpaceTopContainer> containers;
 
     protected List<ASpaceDigitalObject> digitalObjects;
+    
+    protected List<ASpaceTopContainer> containersTree;
 
-//    private List<ASpaceArchivalObject> children;
+    protected List<ASpaceDigitalObject> digitalObjectsTree;
+
+    protected List<ASpaceTopContainer> containersSolr;
+
+    protected List<ASpaceDigitalObject> digitalObjectsSolr;
+
+    private List<ASpaceArchivalObject> children;
 
     public ASpaceObject(ArchivesSpaceClient aspaceClient, final String refId) throws IOException {
         if (!getRefIdPattern().matcher(refId).matches()) {
@@ -127,31 +140,35 @@ public abstract class ASpaceObject {
 
     public abstract boolean isPublished();
 
-//    /**
-//     * Gets all children (nested components) for this ASpaceObject.  Subclasses that don't/can't
-//     * have nested components should return an empty list.
-//     */
-//    public List<ASpaceArchivalObject> getChildren() throws IOException {
-//        if (children == null) {
-//            children = new ArrayList<>();
-//            final JsonObject treeObj = getTree();
-//            if (treeObj != null) {
-//                final JsonArray jsonChildren = tree.getJsonArray("children");
-//                if (jsonChildren != null) {
-//                    for (JsonValue c : jsonChildren) {
-//                        final JsonObject child = (JsonObject) c;
-//                        children.add(new ASpaceArchivalObject(this.c, child.getString("record_uri"), child));
-//                    }
-//                }
-//            }
-//        }
-//        return children;
-//    }
+    /**
+     * Gets all children (nested components) for this ASpaceObject.  Subclasses that don't/can't
+     * have nested components should return an empty list.
+     */
+    public List<ASpaceArchivalObject> getChildren() throws IOException {
+        if (children == null) {
+            children = new ArrayList<>();
+            final JsonObject treeObj = getTree();
+            if (treeObj != null) {
+                final JsonArray jsonChildren = tree.getJsonArray("children");
+                if (jsonChildren != null) {
+                    for (JsonValue c : jsonChildren) {
+                        final JsonObject child = (JsonObject) c;
+                        children.add(new ASpaceArchivalObject(this.c, child.getString("record_uri"), child));
+                    }
+                }
+            }
+        }
+        return children;
+    }
 
     public List<ASpaceDigitalObject> getDigitalObjects()  {
-        if (digitalObjects == null) {
+        if (IndexRecords.debugUse != null) {
+            parseInstances();
+        }
+
+        if (digitalObjectsSolr == null) {
             LinkedHashSet<String> digitalObjectsSet = new LinkedHashSet<>();
-            digitalObjects = new ArrayList<>();
+            digitalObjectsSolr = new ArrayList<>();
             Iterator<SolrDocument> docs;
             try {
                 docs = SolrHelper.getRecordsForQuery(c.getSolrUrl(), getDigitalObjectQuery(), "uri,digital_object_uris");
@@ -163,9 +180,17 @@ public abstract class ASpaceObject {
                             digitalObjectsSet.add(uriobj.toString());
                         }
                     }
+                    Collection<Object> uri =  d.getFieldValues("uri");
+                    if (uri !=  null && uri.size() > 0) {
+                        for (Object u : uri) {
+                            if (u.toString().contains("digital_objects")) {
+                                digitalObjectsSet.add(u.toString());
+                            }
+                        }
+                    }
                 }
                 for (String ref : digitalObjectsSet) {
-                    this.digitalObjects.add(new ASpaceDigitalObject(c, ref));
+                    this.digitalObjectsSolr.add(new ASpaceDigitalObject(c, ref));
                 }
             }
             catch (SolrServerException e) {
@@ -175,6 +200,38 @@ public abstract class ASpaceObject {
                 throw new RuntimeException(e);
             }
         }
+        
+        if (IndexRecords.debugUse != null) {
+            if (digitalObjectsSolr.size() != digitalObjectsTree.size()) {
+                LOGGER.warn(">>>>>>> different count of digitalObjects: solr = "+ digitalObjectsSolr.size()+
+                        "  tree = " + digitalObjectsTree.size()+ " <<<<<<<<<<");
+            }
+            else { 
+                boolean gotEmAll = true;
+                Set<String> tcSet = new LinkedHashSet<>();
+                for (ASpaceDigitalObject astc : digitalObjectsSolr) {
+                    String ref = astc.getId();
+                    tcSet.add(ref);
+                }
+                for (ASpaceDigitalObject astt : digitalObjectsTree) {
+                    String ref = astt.getId();
+                    if (!tcSet.contains(ref)) {
+                        gotEmAll = false;
+                    }
+                }
+                if (! gotEmAll ) {
+                    LOGGER.warn(">>>>>>>>>>>>>>>>>>>>>>>>>> different list of digitalObjects <<<<<<<<<<<<<<<<<<<<<<<<<<<");
+                }
+            }
+        }
+        
+        if (IndexRecords.debugUse == null || IndexRecords.debugUse.equals("solr")) {
+            digitalObjects = digitalObjectsSolr;
+        }
+        else {
+            digitalObjects = digitalObjectsTree;
+        }
+       
         return digitalObjects;
     }
 
@@ -192,8 +249,8 @@ public abstract class ASpaceObject {
             if (repositoryJV != null && repositoryJV.getValueType() == JsonValue.ValueType.OBJECT) {
                 repository = ((JsonObject)repositoryJV).getString("ref");
             }
-            query = "primary_type:\"archival_object\" AND  ancestors:\"" + uri + "\" AND repository:\"" + repository + "\"" +
-                            " AND digital_object_uris:* AND publish:\"true\"";
+            query = "(primary_type:\"archival_object\" AND  ancestors:\"" + uri + "\" AND repository:\"" + repository + "\"" +
+                            " AND digital_object_uris:* AND publish:\"true\") OR (primary_type:\"digital_object\" AND linked_instance_uris:\""+uri+"\")";
         }
         else if (uri.contains("accessions")) {
             query = "id:\""+uri+"\" AND digital_object_uris:* AND publish:\"true\"";
@@ -202,11 +259,16 @@ public abstract class ASpaceObject {
     }
 
     public List<ASpaceTopContainer> getTopContainers() {
-        if (containers == null) {
-            containers = new ArrayList<>();
+        if (IndexRecords.debugUse != null) {
+            parseInstances();
+        }
+        String query = getTopContainerQuery();
+
+        if (containersSolr == null) {
+            containersSolr = new ArrayList<>();
             Iterator<SolrDocument> updated;
             try {
-                updated = SolrHelper.getRecordsForQuery(c.getSolrUrl(), getTopContainerQuery(), "uri,barcode_u_sstr,display_string,location_uri_u_sstr,collection_identifier_stored_u_sstr");
+                updated = SolrHelper.getRecordsForQuery(c.getSolrUrl(), query, "uri,barcode_u_sstr,display_string,location_uri_u_sstr,collection_identifier_stored_u_sstr");
                 while (updated.hasNext()) {
                     SolrDocument d = updated.next();
                     Object uriobj =  d.getFirstValue("uri");
@@ -216,7 +278,7 @@ public abstract class ASpaceObject {
                     String containerCallNumberStr = containerCallNumber != null ? containerCallNumber.toString() : null;
                     Object currentLocationRef = d.getFirstValue("location_uri_u_sstr");
                     String currentLocationRefStr = currentLocationRef != null ? currentLocationRef.toString() : null;
-                    this.containers.add(new ASpaceTopContainer(c, uriobj.toString(), barcodeStr, containerCallNumberStr, currentLocationRefStr));
+                    this.containersSolr.add(new ASpaceTopContainer(c, uriobj.toString(), barcodeStr, containerCallNumberStr, currentLocationRefStr));
                 }
             }
             catch (SolrServerException e) {
@@ -226,7 +288,38 @@ public abstract class ASpaceObject {
                 throw new RuntimeException(e);
             }
         }
-        return containers;
+        if (IndexRecords.debugUse != null) {
+            if (containersSolr.size() != containersTree.size()) {
+                LOGGER.warn(">>>>>>> different count of containers: solr = "+ containersSolr.size()+
+                        "  tree = " + containersTree.size()+ " <<<<<<<<<<");
+            }
+            else { 
+                boolean gotEmAll = true;
+                Set<String> tcSet = new LinkedHashSet<>();
+                for (ASpaceTopContainer astc : containersSolr) {
+                    String ref = astc.getId();
+                    tcSet.add(ref);
+                }
+                for (ASpaceTopContainer astt : containersTree) {
+                    String ref = astt.getId();
+                    if (!tcSet.contains(ref)) {
+                        gotEmAll = false;
+                    }
+                }
+                if (! gotEmAll ) {
+                    LOGGER.warn(">>>>>>>>>>>>>>>>>>>>>>>>>> different list of containers <<<<<<<<<<<<<<<<<<<<<<<<<<<");
+                }
+            }
+        }
+                
+        if (IndexRecords.debugUse == null || IndexRecords.debugUse.equals("solr")) {
+            containers = containersSolr;
+        }
+        else {
+            containers = containersTree;
+        }
+            
+        return(containers);
     }
 
     private String getTopContainerQuery()
@@ -234,54 +327,60 @@ public abstract class ASpaceObject {
 //      primary_type:"top_container"  AND  
 //      collection_uri_u_sstr:"/repositories/3/resources/488"
         String uri = getRecord().getString("uri");
-        String query = "primary_type:\"top_container\" AND  collection_uri_u_sstr:\"" + uri + "\"";
+        String query = "";
+        if (topRefid.contains("resources")) {
+            query = "primary_type:\"top_container\" AND  collection_uri_u_sstr:\"" + uri + "\"";
+        }
+        else if (topRefid.contains("accessions")) {
+            query = "primary_type:\"top_container\" AND  collection_uri_u_sstr:\"" + uri + "\"";
+        }
         return(query);
     }
 
-//    private void parseInstances() {
-//        if (containers == null || digitalObjects == null) {
-//            containers = new ArrayList<>();
-//            digitalObjects = new ArrayList<>();
-//            try {
-//                Set<String> containers = new HashSet<>();
-//                Set<String> dos = new HashSet<>();
-//                collectInstanceRefs(containers, dos);
-//                for (String ref : containers) {
-//                    this.containers.add(new ASpaceTopContainer(c, ref));
-//                }
-//                for (String ref : dos) {
-//                    this.digitalObjects.add(new ASpaceDigitalObject(c, ref));
-//                }
-//            } catch (IOException e) {
-//                throw new RuntimeException(e);
-//            }
-//        }
-//    }
+    private void parseInstances() {
+        if (containersTree == null || digitalObjectsTree == null) {
+            containersTree = new ArrayList<>();
+            digitalObjectsTree = new ArrayList<>();
+            try {
+                Set<String> containers = new HashSet<>();
+                Set<String> dos = new HashSet<>();
+                collectInstanceRefs(containers, dos);
+                for (String ref : containers) {
+                    this.containersTree.add(new ASpaceTopContainer(c, ref));
+                }
+                for (String ref : dos) {
+                    this.digitalObjectsTree.add(new ASpaceDigitalObject(c, ref));
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
 
-//    /**
-//     * Adds all the container refs and digital object refs for this node to the passed
-//     * sets and recurses to the published children.
-//     */
-//    protected void collectInstanceRefs(final Set<String> containerRefs, Set<String> doRefs) throws IOException {
-//        final JsonValue instances = getRecord().get("instances");
-//        if (instances != null && instances.getValueType() == JsonValue.ValueType.ARRAY) {
-//            for (JsonValue i : (JsonArray) instances) {
-//                final JsonObject instance = (JsonObject) i;
-//                if (!instance.getString("instance_type").equals("digital_object")) {
-//                    containerRefs.add(instance.getJsonObject("sub_container").getJsonObject("top_container").getString("ref"));
-//                } else {
-//                    doRefs.add(instance.getJsonObject("digital_object").getString("ref"));
-//                }
-//            }
-//        }
-//
-//        // recurse to children
-//        for (ASpaceArchivalObject child : getChildren()) {
+    /**
+     * Adds all the container refs and digital object refs for this node to the passed
+     * sets and recurses to the published children.
+     */
+    protected void collectInstanceRefs(final Set<String> containerRefs, Set<String> doRefs) throws IOException {
+        final JsonValue instances = getRecord().get("instances");
+        if (instances != null && instances.getValueType() == JsonValue.ValueType.ARRAY) {
+            for (JsonValue i : (JsonArray) instances) {
+                final JsonObject instance = (JsonObject) i;
+                if (!instance.getString("instance_type").equals("digital_object")) {
+                    containerRefs.add(instance.getJsonObject("sub_container").getJsonObject("top_container").getString("ref"));
+                } else {
+                    doRefs.add(instance.getJsonObject("digital_object").getString("ref"));
+                }
+            }
+        }
+
+        // recurse to children
+        for (ASpaceArchivalObject child : getChildren()) {
 //            if (child.isPublished()) {
-//                child.collectInstanceRefs(containerRefs, doRefs);
+                child.collectInstanceRefs(containerRefs, doRefs);
 //            }
-//        }
-//    }
+        }
+    }
 
     public int getLockVersion() {
         return getRecord().getInt("lock_version");
@@ -311,289 +410,290 @@ public abstract class ASpaceObject {
         return sb.toString();
     }
 
-    public File generateSolrAddDoc(final File outputDir, final String dbHost, final String dbUser, final String dbPassword) throws IOException, XMLStreamException, SQLException {
-        final String shortRefId = getIdFromRef(getRecord().getString("uri"));
-        final String callNumber = getCallNumber();
-        final String title = getRecord().getString("title");
-
-        XMLOutputFactory xmlOutputFactory = XMLOutputFactory.newFactory();
-        final File outputFile = getSolrOutputFile(outputDir, getRecord().getString("uri"));
-        outputFile.getParentFile().mkdirs();
-        XMLStreamWriter xmlOut = xmlOutputFactory.createXMLStreamWriter(new FileOutputStream(outputFile));
-        xmlOut.writeStartDocument("UTF-8", "1.0");
-        xmlOut.writeCharacters("\n");
-        xmlOut.writeStartElement("add");
-        xmlOut.writeCharacters("  ");
-        xmlOut.writeStartElement("doc");
-        xmlOut.writeCharacters("\n");
-
-        addField(xmlOut, "id", shortRefId);
-        String hid = getId();
-        // Despite it's name, "alternate_id_facet" currently must only be an alternate id that represents a
-        // distinct digital object for which there's an IIIF manifest, rights_wrapper_url, etc.
-        //
-        //if (isUniqueVirgoId(hid)) {
-        //    addField(xmlOut, "alternate_id_facet", hid);
-        //}
-        addField(xmlOut, "aspace_version_facet", String.valueOf(getLockVersion()));
-        addField(xmlOut, "call_number_facet", callNumber);
-        addField(xmlOut, "main_title_display", title);
-        addField(xmlOut, "title_text", title);
-        addField(xmlOut, "source_facet", "ArchivesSpace");
-        addField(xmlOut, "format_facet", "Manuscript/Archive");
-        final boolean shadowed = isShadowed();
-        addField(xmlOut, "shadowed_location_facet", shadowed ? "HIDDEN" : "VISIBLE");
-        
-        if (!shadowed) {
-
-            // TODO: get this from the data
-            //addRightsFields("http://rightsstatements.org/vocab/InC-EDU/1.0/", xmlOut, id, tracksysDbHost, tracksysDbUsername, tracksysDbPassword);
-
-            // TODO: do something with finding aid status
-
-            final String library = getLibrary(getRecord());
-            addField(xmlOut, "library_facet", library);
-
-            // TODO location_facet
-
-            // subjects
-            final JsonValue subjects = getRecord().get("subjects");
-            if (subjects != null && subjects.getValueType() == JsonValue.ValueType.ARRAY) {
-                for (JsonValue sub : (JsonArray) subjects) {
-                    final String ref = ((JsonObject) sub).getString("ref");
-                    final JsonObject subject = c.resolveReference(ref);
-                    // TODO: break up these subjects
-                    if (subject.getBoolean("publish")) {
-                        addField(xmlOut, "subject_facet", subject.getString("title"));
-                        addField(xmlOut, "subject_text", subject.getString("title"));
-                    }
-                }
-            }
-
-            // extents
-            final JsonValue extents = getRecord().get("extents");
-            if (extents != null && extents.getValueType() == JsonValue.ValueType.ARRAY) {
-                for (JsonValue extent : (JsonArray) extents) {
-                    JsonObject e = (JsonObject) extent;
-
-                    StringBuffer extentString = new StringBuffer();
-                    extentString.append(e.getString("number"));
-                    extentString.append(" ");
-                    final String type = e.getString("extent_type");
-                    extentString.append(type.replace("_", " "));
-                    if (e.get("container_summary") != null) {
-                        extentString.append(" (" + e.getString("container_summary") + ")");
-                    }
-                    addField(xmlOut, "extent_display", extentString.toString());
-                }
-            }
-
-            // dates
-            boolean sortDateSet = false;
-            final JsonValue dates = getRecord().get("dates");
-            if (dates != null && dates.getValueType() == JsonValue.ValueType.ARRAY) {
-                for (JsonValue date : (JsonArray) dates) {
-                    try {
-                        final JsonObject dateObj = (JsonObject) date;
-                        if (hasValue(dateObj, "expression")) {
-                            final String dateStr = ((JsonObject) date).getString("expression");
-                            int year = -1;
-                            if (dateStr.matches("\\d\\d\\d\\d")) {
-                                year = Integer.parseInt(dateStr);
-                            } else if (dateStr.matches("\\d\\d\\d\\d-\\d\\d\\d\\d")) {
-                                year = Integer.parseInt(dateStr.substring(5));
-                            }
-                            if (year != 0) {
-                                if (!sortDateSet) {
-                                    addField(xmlOut, "date_multisort_i", String.valueOf(year));
-                                    sortDateSet = true;
-                                }
-                                final int yearsAgo = Calendar.getInstance().get(Calendar.YEAR) - year;
-                                if (yearsAgo > 50) {
-                                    addField(xmlOut, "published_date_facet", "More than 50 years ago");
-                                }
-                                if (yearsAgo <= 50) {
-                                    addField(xmlOut, "published_date_facet", "Last 50 years");
-                                }
-                                if (yearsAgo <= 10) {
-                                    addField(xmlOut, "published_date_facet", "Last 10 years");
-                                }
-                                if (yearsAgo <= 3) {
-                                    addField(xmlOut, "published_date_facet", "Last 3 years");
-                                }
-                                if (yearsAgo <= 1) {
-                                    addField(xmlOut, "published_date_facet", "Last 12 months");
-                                }
-                            } else {
-                                throw new RuntimeException("Cannot parse date! (" + dateStr + ")");
-                            }
-                            addField(xmlOut, "date_display", dateStr);
-                        } else if (hasValue(dateObj, "begin") && hasValue(dateObj, "end")) {
-                            final String begin = ((JsonObject) date).getString("begin");
-                            final String end = ((JsonObject) date).getString("end");
-                            if (begin != null && end != null) {
-                                addField(xmlOut, "date_display", begin + "-" + end);
-                            }
-                        }
-                    } catch (Exception ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }
-            }
-
-            // access restrctions note
-            final JsonValue restrictions = getRecord().get("access_restrictions_note");
-            if (restrictions != null) {
-                addField(xmlOut, "access_restrictions_display", restrictions.toString());
-            }
-            
-            // linked agents
-            final JsonValue agents = getRecord().get("linked_agents");
-            if (agents != null && agents.getValueType() == JsonValue.ValueType.ARRAY) {
-                for (JsonValue agentLink : (JsonArray) agents) {
-                    final String ref = ((JsonObject) agentLink).getString("ref");
-                    final String role = ((JsonObject) agentLink).getString("role");
-                    final JsonObject agent = c.resolveReference(ref);
-                    try {
-                        if (agent.getBoolean("publish")) {
-                            if (role.equals("creator")) {
-                                final String name = agent.getString("title");
-                                addField(xmlOut, "author_facet", name);
-                                addField(xmlOut, "author_text", name);
-                            }
-                        }
-                    } catch (NullPointerException e) {
-                        // TODO: do something better than skipping it
-                    }
-                }
-            }
-
-            // Top Containers
-            JsonArrayBuilder containersBuilder = Json.createArrayBuilder();
-            List<ASpaceTopContainer> containers = new ArrayList<>(getTopContainers());
-            // System.err.println("Pre-Sort");
-            // for (ASpaceTopContainer container : containers) {
-            //     System.err.println(container.getContainerCallNumber(getCallNumber()));
-            // }
-            Collections.sort(containers, new Comparator<ASpaceTopContainer>() {
-                @Override
-                public int compare(ASpaceTopContainer o1, ASpaceTopContainer o2) {
-                	StringNaturalCompare comp = new StringNaturalCompare(); 
-                	return comp.compare(o1.getContainerCallNumber(""), o2.getContainerCallNumber(""));
-                }
-            });
-            // System.err.println("Post-Sort");
-            // for (ASpaceTopContainer container : containers) {
-            //     System.err.println(container.getContainerCallNumber(getCallNumber()));
-            // }
-
-            for (ASpaceTopContainer container : containers) {
-                JsonObjectBuilder b = Json.createObjectBuilder();
-                b.add("library", library);
-                b.add("location", container.getLocation());
-                b.add("call_number", container.getContainerCallNumber(getCallNumber()));
-                b.add("barcode", container.getBarcode());
-                b.add("special_collections_location", container.getCurrentLocation());
-                containersBuilder.add(b.build());
-            }
-            addField(xmlOut, "special_collections_holding_display", containersBuilder.build().toString());
-
-
-            // Digital Objects
-            int manifestsIncluded = 0;
-            if (getDigitalObjects().size() <= 5) {
-                for (ASpaceDigitalObject digitalObject : getDigitalObjects()) {
-                    if (digitalObject.getIIIFURL() != null) {
-                        try {
-                            addDigitalImages(digitalObject.getIIIFURL(), xmlOut, manifestsIncluded == 0, dbHost, dbUser, dbPassword);
-                            manifestsIncluded++;
-                        } catch (IOException ex) {
-                            System.err.println("Unable to fetch manifest: " + digitalObject.getIIIFURL());
-                        }
-                    }
-                }
-            }
-            if (manifestsIncluded > 0) {
-                addField(xmlOut, "feature_facet", "iiif");
-                addField(xmlOut, "format_facet", "Online");
-            } else {
-                addField(xmlOut, "thumbnail_url_display", "http://iiif.lib.virginia.edu/iiif/static:6/full/!115,125/0/default.jpg");
-            }
-
-            // Despite it's name, "alternate_id_facet" currently must only be an alternate id that represents a
-            // distinct digital object for which there's an IIIF manifest, rights_wrapper_url, etc.
-            //
-            // related accessions (use for alternate ids)
-            //final JsonValue accessions = getRecord().get("related_accessions");
-            //if (accessions != null && accessions.getValueType() == JsonValue.ValueType.ARRAY) {
-            //    for (JsonValue a : (JsonArray) accessions) {
-            //        final String ref = ((JsonObject) a).getString("ref");
-            //        final ASpaceAccession accession = new ASpaceAccession(c, ref);
-            //        addField(xmlOut, "alternate_id_facet", accession.getId());
-            //    }
-            //}
-
-            // notes (right now, we only include the scope notes)
-            final JsonValue notes = getRecord().get("notes");
-            if (notes != null && notes.getValueType() == JsonValue.ValueType.ARRAY) {
-                for (JsonValue n : (JsonArray) notes) {
-                    JsonObject note = (JsonObject) n;
-                    if (note.getBoolean("publish")) {
-                        JsonArray subnotes = note.getJsonArray("subnotes");
-                        if (subnotes != null) {
-                            StringBuffer noteText = new StringBuffer();
-                            for (int i = 0; i < subnotes.size(); i++) {
-                                JsonObject subnote = subnotes.getJsonObject(i);
-                                if (subnote.getBoolean("publish") && subnote.get("content") != null) {
-                                    if (noteText.length() > 0) {
-                                        noteText.append("\n");
-                                    }
-                                    noteText.append(subnote.getString("content"));
-                                }
-                            }
-                            if (noteText.length() > 0) {
-                                if (note.getString("type").equals("scopecontent")) {
-                                    addField(xmlOut, "note_display", noteText.toString());
-                                }
-                                addField(xmlOut, "note_text", noteText.toString());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (getRecord().get("content_description") != null) {
-            final String noteText = getRecord().getString("content_description");
-            addField(xmlOut, "note_text", noteText.toString());
-            addField(xmlOut, "note_display", noteText.toString());
-        }
-
-
-
-        addField(xmlOut, "online_url_display", "https://archives.lib.virginia.edu" + getRecord().getString("uri"));
-
-        // A feature_facet is needed for proper display in Virgo.
-        addField(xmlOut, "feature_facet", "suppress_endnote_export");
-        addField(xmlOut, "feature_facet", "suppress_refworks_export");
-        addField(xmlOut, "feature_facet", "suppress_ris_export");
-
-        xmlOut.writeCharacters("  ");
-        xmlOut.writeEndElement(); // doc
-        xmlOut.writeCharacters("\n");
-        xmlOut.writeEndElement(); // add
-
-        xmlOut.close();
-
-        return outputFile;
-
-    }
-
+//    public File generateSolrAddDoc(final File outputDir, final String dbHost, final String dbUser, final String dbPassword) throws IOException, XMLStreamException, SQLException {
+//        final String shortRefId = getIdFromRef(getRecord().getString("uri"));
+//        final String callNumber = getCallNumber();
+//        final String title = getRecord().getString("title");
+//        
+//        XMLOutputFactory xmlOutputFactory = XMLOutputFactory.newFactory();
+//        final File outputFile = getSolrOutputFile(outputDir, getRecord().getString("uri"));
+//        outputFile.getParentFile().mkdirs();
+//        XMLStreamWriter xmlOut = xmlOutputFactory.createXMLStreamWriter(new FileOutputStream(outputFile));
+//        xmlOut.writeStartDocument("UTF-8", "1.0");
+//        xmlOut.writeCharacters("\n");
+//        xmlOut.writeStartElement("add");
+//        xmlOut.writeCharacters("  ");
+//        xmlOut.writeStartElement("doc");
+//        xmlOut.writeCharacters("\n");
+//
+//        addField(xmlOut, "id", shortRefId);
+//        String hid = getId();
+//        // Despite it's name, "alternate_id_facet" currently must only be an alternate id that represents a
+//        // distinct digital object for which there's an IIIF manifest, rights_wrapper_url, etc.
+//        //
+//        //if (isUniqueVirgoId(hid)) {
+//        //    addField(xmlOut, "alternate_id_facet", hid);
+//        //}
+//        addField(xmlOut, "aspace_version_facet", String.valueOf(getLockVersion()));
+//        addField(xmlOut, "call_number_facet", callNumber);
+//        addField(xmlOut, "main_title_display", title);
+//        addField(xmlOut, "title_text", title);
+//        addField(xmlOut, "source_facet", "ArchivesSpace");
+//        addField(xmlOut, "format_facet", "Manuscript/Archive");
+//        topRefid = getRecord().getString("uri");
+//        final boolean shadowed = isShadowed();
+//        addField(xmlOut, "shadowed_location_facet", shadowed ? "HIDDEN" : "VISIBLE");
+//        
+//        if (!shadowed) {
+//
+//            // TODO: get this from the data
+//            //addRightsFields("http://rightsstatements.org/vocab/InC-EDU/1.0/", xmlOut, id, tracksysDbHost, tracksysDbUsername, tracksysDbPassword);
+//
+//            // TODO: do something with finding aid status
+//
+//            final String library = getLibrary(getRecord());
+//            addField(xmlOut, "library_facet", library);
+//
+//            // TODO location_facet
+//
+//            // subjects
+//            final JsonValue subjects = getRecord().get("subjects");
+//            if (subjects != null && subjects.getValueType() == JsonValue.ValueType.ARRAY) {
+//                for (JsonValue sub : (JsonArray) subjects) {
+//                    final String ref = ((JsonObject) sub).getString("ref");
+//                    final JsonObject subject = c.resolveReference(ref);
+//                    // TODO: break up these subjects
+//                    if (subject.getBoolean("publish")) {
+//                        addField(xmlOut, "subject_facet", subject.getString("title"));
+//                        addField(xmlOut, "subject_text", subject.getString("title"));
+//                    }
+//                }
+//            }
+//
+//            // extents
+//            final JsonValue extents = getRecord().get("extents");
+//            if (extents != null && extents.getValueType() == JsonValue.ValueType.ARRAY) {
+//                for (JsonValue extent : (JsonArray) extents) {
+//                    JsonObject e = (JsonObject) extent;
+//
+//                    StringBuffer extentString = new StringBuffer();
+//                    extentString.append(e.getString("number"));
+//                    extentString.append(" ");
+//                    final String type = e.getString("extent_type");
+//                    extentString.append(type.replace("_", " "));
+//                    if (e.get("container_summary") != null) {
+//                        extentString.append(" (" + e.getString("container_summary") + ")");
+//                    }
+//                    addField(xmlOut, "extent_display", extentString.toString());
+//                }
+//            }
+//
+//            // dates
+//            boolean sortDateSet = false;
+//            final JsonValue dates = getRecord().get("dates");
+//            if (dates != null && dates.getValueType() == JsonValue.ValueType.ARRAY) {
+//                for (JsonValue date : (JsonArray) dates) {
+//                    try {
+//                        final JsonObject dateObj = (JsonObject) date;
+//                        if (hasValue(dateObj, "expression")) {
+//                            final String dateStr = ((JsonObject) date).getString("expression");
+//                            int year = -1;
+//                            if (dateStr.matches("\\d\\d\\d\\d")) {
+//                                year = Integer.parseInt(dateStr);
+//                            } else if (dateStr.matches("\\d\\d\\d\\d-\\d\\d\\d\\d")) {
+//                                year = Integer.parseInt(dateStr.substring(5));
+//                            }
+//                            if (year != 0) {
+//                                if (!sortDateSet) {
+//                                    addField(xmlOut, "date_multisort_i", String.valueOf(year));
+//                                    sortDateSet = true;
+//                                }
+//                                final int yearsAgo = Calendar.getInstance().get(Calendar.YEAR) - year;
+//                                if (yearsAgo > 50) {
+//                                    addField(xmlOut, "published_date_facet", "More than 50 years ago");
+//                                }
+//                                if (yearsAgo <= 50) {
+//                                    addField(xmlOut, "published_date_facet", "Last 50 years");
+//                                }
+//                                if (yearsAgo <= 10) {
+//                                    addField(xmlOut, "published_date_facet", "Last 10 years");
+//                                }
+//                                if (yearsAgo <= 3) {
+//                                    addField(xmlOut, "published_date_facet", "Last 3 years");
+//                                }
+//                                if (yearsAgo <= 1) {
+//                                    addField(xmlOut, "published_date_facet", "Last 12 months");
+//                                }
+//                            } else {
+//                                throw new RuntimeException("Cannot parse date! (" + dateStr + ")");
+//                            }
+//                            addField(xmlOut, "date_display", dateStr);
+//                        } else if (hasValue(dateObj, "begin") && hasValue(dateObj, "end")) {
+//                            final String begin = ((JsonObject) date).getString("begin");
+//                            final String end = ((JsonObject) date).getString("end");
+//                            if (begin != null && end != null) {
+//                                addField(xmlOut, "date_display", begin + "-" + end);
+//                            }
+//                        }
+//                    } catch (Exception ex) {
+//                        throw new RuntimeException(ex);
+//                    }
+//                }
+//            }
+//
+//            // access restrctions note
+//            final JsonValue restrictions = getRecord().get("access_restrictions_note");
+//            if (restrictions != null) {
+//                addField(xmlOut, "access_restrictions_display", restrictions.toString());
+//            }
+//            
+//            // linked agents
+//            final JsonValue agents = getRecord().get("linked_agents");
+//            if (agents != null && agents.getValueType() == JsonValue.ValueType.ARRAY) {
+//                for (JsonValue agentLink : (JsonArray) agents) {
+//                    final String ref = ((JsonObject) agentLink).getString("ref");
+//                    final String role = ((JsonObject) agentLink).getString("role");
+//                    final JsonObject agent = c.resolveReference(ref);
+//                    try {
+//                        if (agent.getBoolean("publish")) {
+//                            if (role.equals("creator")) {
+//                                final String name = agent.getString("title");
+//                                addField(xmlOut, "author_facet", name);
+//                                addField(xmlOut, "author_text", name);
+//                            }
+//                        }
+//                    } catch (NullPointerException e) {
+//                        // TODO: do something better than skipping it
+//                    }
+//                }
+//            }
+//
+//            // Top Containers
+//            JsonArrayBuilder containersBuilder = Json.createArrayBuilder();
+//            List<ASpaceTopContainer> containers = new ArrayList<>(getTopContainers());
+//            // System.err.println("Pre-Sort");
+//            // for (ASpaceTopContainer container : containers) {
+//            //     System.err.println(container.getContainerCallNumber(getCallNumber()));
+//            // }
+//            Collections.sort(containers, new Comparator<ASpaceTopContainer>() {
+//                @Override
+//                public int compare(ASpaceTopContainer o1, ASpaceTopContainer o2) {
+//                	StringNaturalCompare comp = new StringNaturalCompare(); 
+//                	return comp.compare(o1.getContainerCallNumber(""), o2.getContainerCallNumber(""));
+//                }
+//            });
+//            // System.err.println("Post-Sort");
+//            // for (ASpaceTopContainer container : containers) {
+//            //     System.err.println(container.getContainerCallNumber(getCallNumber()));
+//            // }
+//
+//            for (ASpaceTopContainer container : containers) {
+//                JsonObjectBuilder b = Json.createObjectBuilder();
+//                b.add("library", library);
+//                b.add("location", container.getLocation());
+//                b.add("call_number", container.getContainerCallNumber(getCallNumber()));
+//                b.add("barcode", container.getBarcode());
+//                b.add("special_collections_location", container.getCurrentLocation());
+//                containersBuilder.add(b.build());
+//            }
+//            addField(xmlOut, "special_collections_holding_display", containersBuilder.build().toString());
+//
+//
+//            // Digital Objects
+//            int manifestsIncluded = 0;
+//            if (getDigitalObjects().size() <= 5) {
+//                for (ASpaceDigitalObject digitalObject : getDigitalObjects()) {
+//                    if (digitalObject.getIIIFURL() != null) {
+//                        try {
+//                            addDigitalImages(digitalObject.getIIIFURL(), xmlOut, manifestsIncluded == 0, dbHost, dbUser, dbPassword);
+//                            manifestsIncluded++;
+//                        } catch (IOException ex) {
+//                            System.err.println("Unable to fetch manifest: " + digitalObject.getIIIFURL());
+//                        }
+//                    }
+//                }
+//            }
+//            if (manifestsIncluded > 0) {
+//                addField(xmlOut, "feature_facet", "iiif");
+//                addField(xmlOut, "format_facet", "Online");
+//            } else {
+//                addField(xmlOut, "thumbnail_url_display", "http://iiif.lib.virginia.edu/iiif/static:6/full/!115,125/0/default.jpg");
+//            }
+//
+//            // Despite it's name, "alternate_id_facet" currently must only be an alternate id that represents a
+//            // distinct digital object for which there's an IIIF manifest, rights_wrapper_url, etc.
+//            //
+//            // related accessions (use for alternate ids)
+//            //final JsonValue accessions = getRecord().get("related_accessions");
+//            //if (accessions != null && accessions.getValueType() == JsonValue.ValueType.ARRAY) {
+//            //    for (JsonValue a : (JsonArray) accessions) {
+//            //        final String ref = ((JsonObject) a).getString("ref");
+//            //        final ASpaceAccession accession = new ASpaceAccession(c, ref);
+//            //        addField(xmlOut, "alternate_id_facet", accession.getId());
+//            //    }
+//            //}
+//
+//            // notes (right now, we only include the scope notes)
+//            final JsonValue notes = getRecord().get("notes");
+//            if (notes != null && notes.getValueType() == JsonValue.ValueType.ARRAY) {
+//                for (JsonValue n : (JsonArray) notes) {
+//                    JsonObject note = (JsonObject) n;
+//                    if (note.getBoolean("publish")) {
+//                        JsonArray subnotes = note.getJsonArray("subnotes");
+//                        if (subnotes != null) {
+//                            StringBuffer noteText = new StringBuffer();
+//                            for (int i = 0; i < subnotes.size(); i++) {
+//                                JsonObject subnote = subnotes.getJsonObject(i);
+//                                if (subnote.getBoolean("publish") && subnote.get("content") != null) {
+//                                    if (noteText.length() > 0) {
+//                                        noteText.append("\n");
+//                                    }
+//                                    noteText.append(subnote.getString("content"));
+//                                }
+//                            }
+//                            if (noteText.length() > 0) {
+//                                if (note.getString("type").equals("scopecontent")) {
+//                                    addField(xmlOut, "note_display", noteText.toString());
+//                                }
+//                                addField(xmlOut, "note_text", noteText.toString());
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//
+//        if (getRecord().get("content_description") != null) {
+//            final String noteText = getRecord().getString("content_description");
+//            addField(xmlOut, "note_text", noteText.toString());
+//            addField(xmlOut, "note_display", noteText.toString());
+//        }
+//
+//
+//
+//        addField(xmlOut, "online_url_display", "https://archives.lib.virginia.edu" + getRecord().getString("uri"));
+//
+//        // A feature_facet is needed for proper display in Virgo.
+//        addField(xmlOut, "feature_facet", "suppress_endnote_export");
+//        addField(xmlOut, "feature_facet", "suppress_refworks_export");
+//        addField(xmlOut, "feature_facet", "suppress_ris_export");
+//
+//        xmlOut.writeCharacters("  ");
+//        xmlOut.writeEndElement(); // doc
+//        xmlOut.writeCharacters("\n");
+//        xmlOut.writeEndElement(); // add
+//
+//        xmlOut.close();
+//
+//        return outputFile;
+//
+//    }
+//
     public File generateV4SolrAddDoc(final File outputDir, final String dbHost, final String dbUser, final String dbPassword) throws IOException, XMLStreamException, SQLException {
         final String shortRefId = getIdFromRef(getRecord().getString("uri"));
         final String callNumber = getCallNumber().replaceFirst("ms ","MS_");
         final String title = getRecord().getString("title");
-
+        topRefid = getRecord().getString("uri");
         XMLOutputFactory xmlOutputFactory = XMLOutputFactory.newFactory();
         final File outputFile = getSolrOutputFile(outputDir, getRecord().getString("uri"));
         outputFile.getParentFile().mkdirs();
@@ -775,8 +875,9 @@ public abstract class ASpaceObject {
 
             // Digital Objects
             int manifestsIncluded = 0;
-            if (getDigitalObjects().size() <= 5) {
-                for (ASpaceDigitalObject digitalObject : getDigitalObjects()) {
+            List<ASpaceDigitalObject> digitalObjects = getDigitalObjects();
+            if (digitalObjects.size() <= 5) {
+                for (ASpaceDigitalObject digitalObject : digitalObjects) {
                     if (digitalObject.getIIIFURL() != null) {
                         try {
                         	addDigitalImagesV4(digitalObject.getIIIFURL(), xmlOut, manifestsIncluded == 0, dbHost, dbUser, dbPassword);
@@ -911,6 +1012,7 @@ public abstract class ASpaceObject {
         // Top Containers
         JsonArrayBuilder containersBuilder = Json.createArrayBuilder();
         List<ASpaceTopContainer> containers = new ArrayList<>(getTopContainers());
+//        List<ASpaceTopContainer> containers = new ArrayList<>(getTopContainers());
         // System.err.println("Pre-Sort");
         // for (ASpaceTopContainer container : containers) {
         //     System.err.println(container.getContainerCallNumber(getCallNumber()));
@@ -919,7 +1021,12 @@ public abstract class ASpaceObject {
             @Override
             public int compare(ASpaceTopContainer o1, ASpaceTopContainer o2) {
                 StringNaturalCompare comp = new StringNaturalCompare(); 
-                return comp.compare(o1.getContainerCallNumber(""), o2.getContainerCallNumber(""));
+                int result = comp.compare(o1.getContainerCallNumber(""), o2.getContainerCallNumber(""));
+                if (result != 0) return (result);
+                result = comp.compare(o1.getBarcode(), o2.getBarcode());
+                if (result != 0) return (result);
+                result = comp.compare(o1.getId(), o2.getId());
+                return(result);
             }
         });
         // System.err.println("Post-Sort");

@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -30,6 +31,7 @@ import java.util.Set;
 public class IndexRecords {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(IndexRecords.class);
+    public static String debugUse = null;
     
     public final static String knownBadRefs = " /repositories/7/resources/174 /repositories/3/accessions/1274 /repositories/7/resources/155 "+
 				"/repositories/7/resources/167 /repositories/7/resources/168 /repositories/7/resources/124 /repositories/7/resources/125 ";
@@ -48,6 +50,7 @@ public class IndexRecords {
         final String user = p.getProperty("tracksysDbUsername");
         final String pass = p.getProperty("tracksysDbPassword");
         final String v3Orv4 = p.getProperty("outputRecordType", "v3");
+        debugUse = p.getProperty("debugUse", null);
 
         final int intervalInHours = Integer.valueOf(p.getProperty("interval"));
 
@@ -67,7 +70,7 @@ public class IndexRecords {
         int reindexed = 0;
         List<String> errorRefs = new ArrayList<>();
         List<String> expectedErrorRefs = new ArrayList<>();
-        final Set<String> refsToUpdate = new HashSet<>();
+        final Set<String> refsToUpdate = new LinkedHashSet<>();
         if (args.length == 0) {
             List<String> repos = findUpdatedRepositories(solrUrl, intervalInHours);
             for (String repoRef : repos) {
@@ -96,9 +99,9 @@ public class IndexRecords {
                 if (v3Orv4.contentEquals("v4")) {
                 	o.generateV4SolrAddDoc(output, host, user, pass);
                 }
-                else {
-                	o.generateSolrAddDoc(output, host, user, pass);
-                }
+//                else {
+//                    o.generateSolrAddDoc(output, host, user, pass);
+//                }
                 if (isSpecialCollections(ref)) {
                     o.writeCirculationRecord(xmlWriter, marcStream);
                 }

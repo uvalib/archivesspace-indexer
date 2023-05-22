@@ -47,7 +47,7 @@ public class ASpaceAccessionTest {
     public void testRequiredFields() throws IOException, XMLStreamException, SQLException, XPathExpressionException, SAXException {
         ASpaceAccession a = new ASpaceAccession(client, REF);
 
-        Document xmlDoc = XmlHelper.parseXmlFile(a.generateSolrAddDoc(OUTPUT_DIR, null, null, null));
+        Document xmlDoc = XmlHelper.parseXmlFile(a.generateV4SolrAddDoc(OUTPUT_DIR, null, null, null));
 
         List<String> ids = SolrHelper.getSolrXmlFieldValues("id", xmlDoc);
         assertEquals(1, ids.size());

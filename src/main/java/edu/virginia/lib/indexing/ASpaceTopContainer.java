@@ -71,7 +71,7 @@ public class ASpaceTopContainer extends ASpaceObject {
      */
     public String getContainerCallNumber(final String owningCallNumber) {
         if (containerCallNumber == null) {
-            containerCallNumber = getRecord().getString("display_string");
+            containerCallNumber = getRecord().getString("display_string").trim();
         }
         return owningCallNumber + " " + containerCallNumber;
     }
@@ -118,13 +118,18 @@ public class ASpaceTopContainer extends ASpaceObject {
             JsonValue barcodeJV = getRecord().get("barcode");
             if (barcodeJV != null) {
                 barcode = getRecord().getString("barcode");
-            } 
+            }
+            if (barcode != null) {
+                barcode = barcode.trim();
+            }
         }
-        Matcher m = Pattern.compile("/repositories/(\\d+)/top_containers/(\\d+)").matcher(this.refId);
-        if (m.matches()) {
-            barcode = "AS:" + m.group(1) + "C" + m.group(2);
-        } else {
-            barcode = "UNKNOWN";
+        if (this.barcode == null || this.barcode.equals("")) {
+            Matcher m = Pattern.compile("/repositories/(\\d+)/top_containers/(\\d+)").matcher(this.refId);
+            if (m.matches()) {
+                barcode = "AS:" + m.group(1) + "C" + m.group(2);
+            } else {
+                barcode = "UNKNOWN";
+            }
         }
         return (barcode);
     }

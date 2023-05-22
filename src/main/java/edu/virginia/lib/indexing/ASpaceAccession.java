@@ -40,7 +40,7 @@ public class ASpaceAccession extends ASpaceObject {
         boolean hasPublishedCollectionRecord = hasPublishedCollectionRecord();
         LOGGER.debug("isPublished = "+published);
         LOGGER.debug("hasPublishedCollectionRecord = "+hasPublishedCollectionRecord);
-        boolean visible = published && hasPublishedCollectionRecord;
+        boolean visible = published && ! hasPublishedCollectionRecord;
         LOGGER.debug("isShadowed = "+ !(visible));
         return !(visible);
     }
@@ -59,6 +59,7 @@ public class ASpaceAccession extends ASpaceObject {
         if (relatedResources.size() == 0) {
             return false;
         }
+        String uri = getRecord().getString("uri");
         for (JsonValue v : relatedResources) {
             ASpaceCollection col = new ASpaceCollection(c, ((JsonObject) v).getString("ref"));
             if (col.isPublished()) {
