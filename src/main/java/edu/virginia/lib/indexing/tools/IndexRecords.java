@@ -52,7 +52,7 @@ public class IndexRecords {
         final String v3Orv4 = p.getProperty("outputRecordType", "v3");
         debugUse = p.getProperty("debugUse", null);
 
-        final int intervalInHours = Integer.valueOf(p.getProperty("interval"));
+        final int intervalInMinutes = Integer.valueOf(p.getProperty("interval"));
 
         final File output = new File(p.getProperty("indexOutputDir"));
         final File marcOutput = new File(p.getProperty("marcOutputDir"));
@@ -72,13 +72,13 @@ public class IndexRecords {
         List<String> expectedErrorRefs = new ArrayList<>();
         final Set<String> refsToUpdate = new LinkedHashSet<>();
         if (args.length == 0) {
-            List<String> repos = findUpdatedRepositories(solrUrl, intervalInHours);
+            List<String> repos = findUpdatedRepositories(solrUrl, intervalInMinutes);
             for (String repoRef : repos) {
                 refsToUpdate.addAll(c.listAccessionIds(repoRef));
                 refsToUpdate.addAll(c.listResourceIds(repoRef));
                 LOGGER.info(refsToUpdate.size() + " contained accessions and resources will be updated because repository " + repoRef + " was updated.");
             }
-            final Set<String> updatedRefs = findUpdatedRecordsToReindex(solrUrl, intervalInHours);
+            final Set<String> updatedRefs = findUpdatedRecordsToReindex(solrUrl, intervalInMinutes);
             LOGGER.info(updatedRefs.size() + " accessions and resources had individual updates");
             refsToUpdate.addAll(updatedRefs);
             LOGGER.info(refsToUpdate.size() + " records to regenerate.");
@@ -127,12 +127,12 @@ public class IndexRecords {
         LOGGER.info((elapsedSeconds / 60) + " minutes elapsed");
 
         if (errorRefs.isEmpty() && expectedErrorRefs.isEmpty()) {
-            LOGGER.info("Updated index and marc records for the " + reindexed + " resources/accessions in ArchivesSpace that changed in the last " + intervalInHours + " hours.");
+            LOGGER.info("Updated index and marc records for the " + reindexed + " resources/accessions in ArchivesSpace that changed in the last " + intervalInMinutes + " minutes.");
         } 
         else {
             LOGGER.warn(errorRefs.size() + " records resulted in errors, ");
             LOGGER.warn(expectedErrorRefs.size() + " records resulted in EXPECTED errors, ");
-            LOGGER.warn(reindexed + " other index/marc records updated in responses to changes in the last " + intervalInHours + " hours.");
+            LOGGER.warn(reindexed + " other index/marc records updated in responses to changes in the last " + intervalInMinutes + " minutes.");
             if (!errorRefs.isEmpty()) {
             	System.exit(1);
             }
@@ -145,21 +145,21 @@ public class IndexRecords {
 
     final static String TYPES = "types";
 
-    private static String getQuery(final int hoursAgo) {
-        if (hoursAgo == -1) {
+    private static String getQuery(final int minutesAgo) {
+        if (minutesAgo == -1) {
             LOGGER.info("hours ago = -1  reindexing all items.");
             return "user_mtime:[* TO NOW]";
         }
         else {
-            return "user_mtime:[NOW-" + hoursAgo + "HOUR TO NOW]";
+            return "user_mtime:[NOW-" + minutesAgo + "MINUTE TO NOW]";
         }
     }
 
     // http://archivesspace01.lib.virginia.edu:8090/collection1/select?q=user_mtime:[NOW-100DAY%20TO%20NOW]&wt=xml&indent=true&facet=true&facet.field=types
     // &fl=id,types,ancestors,linked_instance_uris,related_accession_uris,collection_uri_u_sstr
-    private static Set<String> findUpdatedRecordsToReindex(final String solrUrl, int hoursAgo) throws SolrServerException {
+    private static Set<String> findUpdatedRecordsToReindex(final String solrUrl, int minutesAgo) throws SolrServerException {
         final Set<String> refIds = new HashSet<>();
-        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(hoursAgo) + " AND (types:resource OR types:archival_object OR types:top_container)", 
+        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(minutesAgo) + " AND (types:resource OR types:archival_object OR types:top_container)", 
                                                                        "types,id,related_accession_uris,ancestors,collection_uri_u_sstr");
         while (updated.hasNext()) {
             SolrDocument d = updated.next();
@@ -194,9 +194,9 @@ public class IndexRecords {
         return refIds;
     }
 
-    private static List<String> findUpdatedRepositories(final String solrUrl, int hoursAgo) throws SolrServerException {
+    private static List<String> findUpdatedRepositories(final String solrUrl, int minutesAgo) throws SolrServerException {
         final List<String> refIds = new ArrayList<>();
-        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(hoursAgo) + " AND " + TYPES + ":repository", "id");
+        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(minutesAgo) + " AND " + TYPES + ":repository", "id");
         while (updated.hasNext()) {
             SolrDocument d = updated.next();
             refIds.add((String) d.getFirstValue("id"));
