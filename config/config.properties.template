@@ -1,0 +1,14 @@
+solrUrl:${AVALON_SOLR_URL}
+indexOutputDir:results/index-v4/
+outputRecordType:v4
+archivesSpaceSolrUrl:${ARCHIVESSPACE_SOLR_URL}
+interval:6
+logOutputDir:results/logs/
+marcOutputDir:results/marc/
+marcXmlOutputDir:results/catalog/xml/
+archivesSpaceUrl:${ARCHIVESSPACE_URL}
+username:${ARCHIVESSPACE_USER}
+password:${ARCHIVESSPACE_PASSWORD}
+tracksysDbHost:${TRACKSYS_DBHOST}
+tracksysDbUsername:${TRACKSYS_DBUSER}
+tracksysDbPassword:${TRACKSYS_DBPASSWD}
