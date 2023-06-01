@@ -2,7 +2,7 @@ solrUrl:${AVALON_SOLR_URL}
 indexOutputDir:results/index-v4/
 outputRecordType:v4
 archivesSpaceSolrUrl:${ARCHIVESSPACE_SOLR_URL}
-interval:6
+interval:${AGE_INTERVAL}
 logOutputDir:results/logs/
 marcOutputDir:results/marc/
 marcXmlOutputDir:results/catalog/xml/
