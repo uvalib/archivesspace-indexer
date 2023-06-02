@@ -15,7 +15,7 @@ if [ ${res} -ne 0 ]; then
 fi
 
 # do the appropriate upload
-make upload-${ENVIRONMENT}
+make upload-${UPLOAD_ENVIRONMENT}
 res=$?
 exit ${res}
 
