@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 #
 # entrypoint for the container
 #
