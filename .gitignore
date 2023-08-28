@@ -5,6 +5,7 @@ example.xml
 solr-output
 src/main/java/edu/virginia/lib/indexing/localtools/
 bin
+results
 .project
 .classpath
 .settings
