@@ -47,11 +47,13 @@ public class ASpaceAccession extends ASpaceObject {
 
     public boolean isPublished() {
         boolean published = getRecord().getBoolean("publish");
-        boolean topContainersEmpty = getTopContainers().isEmpty();
+        boolean hasTopContainers = !getTopContainers().isEmpty();
+        boolean hasPublishedDigitalObjects = !getDigitalObjects().isEmpty();
         LOGGER.debug("publish value = "+published);
-        LOGGER.debug("topContainersEmpty = "+topContainersEmpty);
-        LOGGER.debug("isPublished = "+ (published && !topContainersEmpty));
-        return  published && !topContainersEmpty;
+        LOGGER.debug("hasTopContainers = "+hasTopContainers);
+        LOGGER.debug("isPublished = "+ (published && (hasTopContainers || hasPublishedDigitalObjects)));
+  //      return  published && (hasTopContainers);//|| hasPublishedDigitalObjects);
+        return  published && (hasTopContainers || hasPublishedDigitalObjects);
     }
 
     public boolean hasPublishedCollectionRecord() throws IOException {
