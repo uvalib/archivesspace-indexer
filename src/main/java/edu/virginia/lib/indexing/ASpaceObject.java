@@ -876,16 +876,36 @@ public abstract class ASpaceObject {
             // Digital Objects
             int manifestsIncluded = 0;
             List<ASpaceDigitalObject> digitalObjects = getDigitalObjects();
-            if (digitalObjects.size() <= 5) {
-                for (ASpaceDigitalObject digitalObject : digitalObjects) {
-                    if (digitalObject.getIIIFURL() != null) {
-                        try {
-                        	addDigitalImagesV4(digitalObject.getIIIFURL(), xmlOut, manifestsIncluded == 0, dbHost, dbUser, dbPassword);
-                            manifestsIncluded++;
-                        } catch (IOException ex) {
-                            System.err.println("Unable to fetch manifest: " + digitalObject.getIIIFURL());
-                        }
-                    }
+            for (int i = 0; i < digitalObjects.size() && i <= 5; i++) 
+            {
+                ASpaceDigitalObject digitalObject = digitalObjects.get(i);
+                if (digitalObject.getIIIFURL() != null) {
+                    try {
+                    	addDigitalImagesV4(digitalObject.getIIIFURL(), xmlOut, manifestsIncluded == 0, dbHost, dbUser, dbPassword);
+                        manifestsIncluded++;
+                    } catch (IOException ex) {
+                        System.err.println("Unable to fetch manifest: " + digitalObject.getIIIFURL());
+                    }   
+                }
+                String digitalObjectUrl = "https://archives.lib.virginia.edu" + digitalObject.refId; 
+                String digitalObjectLabel = digitalObject.getURLLabel();
+                if (digitalObjectLabel != null)
+                {
+                    addField(xmlOut, "url_label_supp_str_stored", digitalObjectLabel);
+                    addField(xmlOut, "url_supp_str_stored", digitalObjectUrl);
+                }
+            }
+            // External Documents
+            JsonArray extDocs = getRecord().getJsonArray("external_documents");
+            for (int i = 0; i < extDocs.size() && i <= 5; i++)  
+            {
+                JsonObject extDoc = (JsonObject)extDocs.get(i);
+                if (extDoc.getBoolean("publish", false))
+                {
+                    String externalObjectUrl = extDoc.getString("location", null);
+                    String externalObjectLabel = extDoc.getString("title", null);
+                    addField(xmlOut, "url_label_supp_str_stored", externalObjectLabel);
+                    addField(xmlOut, "url_supp_str_stored", externalObjectUrl);
                 }
             }
             if (manifestsIncluded > 0) {
@@ -989,8 +1009,10 @@ public abstract class ASpaceObject {
             addField(xmlOut, "note_tsearch_stored", noteText.toString());
         }
 
-        addField(xmlOut, "url_supp_a", "https://archives.lib.virginia.edu" + getRecord().getString("uri"));
-        addField(xmlOut, "url_label_supp_a", "GUIDE TO THE COLLECTION AVAILABLE ONLINE");
+//        addField(xmlOut, "url_supp_a", "https://archives.lib.virginia.edu" + getRecord().getString("uri"));
+//        addField(xmlOut, "url_label_supp_a", "GUIDE TO THE COLLECTION AVAILABLE ONLINE");
+        addField(xmlOut, "url_str_stored", "https://archives.lib.virginia.edu" + getRecord().getString("uri"));
+        addField(xmlOut, "url_label_str_stored", "GUIDE TO THE COLLECTION AVAILABLE ONLINE");
 
         // A feature_facet is needed for proper display in Virgo.
 //        addField(xmlOut, "feature_facet", "suppress_endnote_export");
@@ -1141,7 +1163,7 @@ public abstract class ASpaceObject {
                 Matcher resizeMatcher = Pattern.compile("(https://.*/full/)[^/]*(/.*)").matcher(thumbnailUrl);
                 if (resizeMatcher.matches()) {
                     thumbnailUrl = resizeMatcher.group(1) + "!115,125" + resizeMatcher.group(2);
-                    addField(xmlOut, "thumbnail_url_a", thumbnailUrl);
+                    addField(xmlOut, "thumbnail_url_str_stored", thumbnailUrl);
 
                     // TODO: maybe use this as the thumbnail, maybe don't...
                 } else {

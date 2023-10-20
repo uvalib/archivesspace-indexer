@@ -1,5 +1,6 @@
 package edu.virginia.lib.indexing;
 
+import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 
@@ -57,6 +58,33 @@ public class ASpaceDigitalObject extends ASpaceObject {
             } catch (Throwable t) {
                 LOGGER.warn("Skipping digital content, likely because no use_statement.");
                 return null;
+            }
+        }
+        return null;
+    }
+    
+    public String getURLLabel() 
+    {
+        if (getRecord().getBoolean("publish") && !getRecord().getBoolean("suppressed"))
+        {
+            JsonArray ver = getRecord().getJsonArray("file_versions");
+            JsonObject fileVer = ver != null && ver.size() > 0 ? (JsonObject) ver.get(0) : null;
+            String digitalObjectType = getRecord().getString("digital_object_type", null); // "still_image"
+            if (digitalObjectType != null && digitalObjectType.startsWith("still_image"))
+            {
+                return "View Digital Image";
+            }
+            else if (fileVer != null && fileVer.getString("use_statement", "").startsWith("image-service"))
+            {
+                String title = getRecord().getString("title", null);
+                if ( title != null)
+                    return title;
+                else 
+                    return "View Digital Image";
+            }
+            else 
+            {
+                return "Access Digital Object";
             }
         }
         return null;
