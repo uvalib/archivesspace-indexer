@@ -171,7 +171,7 @@ public abstract class ASpaceObject {
             digitalObjectsSolr = new ArrayList<>();
             Iterator<SolrDocument> docs;
             try {
-                docs = SolrHelper.getRecordsForQuery(c.getSolrUrl(), getDigitalObjectQuery(), "uri,digital_object_uris");
+                docs = SolrHelper.getRecordsForQuery(c.getSolrUrl(), getDigitalObjectQuery(), "uri,digital_object_uris", "digital object");
                 while (docs.hasNext()) {
                     SolrDocument d = docs.next();
                     Collection<Object> uriobjs =  d.getFieldValues("digital_object_uris");
@@ -268,7 +268,7 @@ public abstract class ASpaceObject {
             containersSolr = new ArrayList<>();
             Iterator<SolrDocument> updated;
             try {
-                updated = SolrHelper.getRecordsForQuery(c.getSolrUrl(), query, "uri,barcode_u_sstr,display_string,location_uri_u_sstr,collection_identifier_stored_u_sstr");
+                updated = SolrHelper.getRecordsForQuery(c.getSolrUrl(), query, "uri,barcode_u_sstr,display_string,location_uri_u_sstr,collection_identifier_stored_u_sstr", "top container");
                 while (updated.hasNext()) {
                     SolrDocument d = updated.next();
                     Object uriobj =  d.getFirstValue("uri");

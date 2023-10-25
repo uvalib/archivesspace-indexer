@@ -167,7 +167,7 @@ public class IndexRecords {
     private static Set<String> findUpdatedRecordsToReindex(final String solrUrl, int minutesAgo) throws SolrServerException {
         final Set<String> refIds = new HashSet<>();
         Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(minutesAgo) + " AND (types:resource OR types:archival_object OR types:top_container)", 
-                                                                       "types,id,related_accession_uris,ancestors,collection_uri_u_sstr");
+                                                                       "types,id,related_accession_uris,ancestors,collection_uri_u_sstr", "modified objects");
         while (updated.hasNext()) {
             SolrDocument d = updated.next();
             if (hasFieldValue(d, TYPES, "resource")) {
@@ -203,7 +203,7 @@ public class IndexRecords {
 
     private static List<String> findUpdatedRepositories(final String solrUrl, int minutesAgo) throws SolrServerException {
         final List<String> refIds = new ArrayList<>();
-        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(minutesAgo) + " AND " + TYPES + ":repository", "id");
+        Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(minutesAgo) + " AND " + TYPES + ":repository", "id", "repository");
         while (updated.hasNext()) {
             SolrDocument d = updated.next();
             refIds.add((String) d.getFirstValue("id"));

@@ -51,11 +51,11 @@ public class SolrHelper {
         return solrserver;
     }
 
-    public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query) throws SolrServerException {
-        return getRecordsForQuery(solrUrl, query, null);
-    }
+//    public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query) throws SolrServerException {
+//        return getRecordsForQuery(solrUrl, query, null, null);
+//    }
     
-    public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query, String fieldList) throws SolrServerException {
+    public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query, String fieldList, String label) throws SolrServerException {
         SolrServer solr = getSolrServer(solrUrl);
         ((HttpSolrServer) solr).setParser(new XMLResponseParser());
         int start = 0;
@@ -81,8 +81,8 @@ public class SolrHelper {
                         response = solr.query(p);
                         int numRetrieved = response.getResults().size();
                         start += numRetrieved;
-                        if (numRetrieved > 0 || start == 0) {
-                            LOGGER.info("records retrieved from solr : "+ start);
+                        if (label != null && (numRetrieved > 0 || start == 0)) {
+                            LOGGER.info(label+" records retrieved from solr : "+ start);
                         }
                         index = 0;
                     } catch (SolrServerException e) {

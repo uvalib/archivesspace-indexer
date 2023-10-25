@@ -7,9 +7,12 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.common.SolrDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.virginia.lib.indexing.helpers.SolrHelper;
 import edu.virginia.lib.indexing.tools.IndexRecords;
 
 import javax.json.Json;
@@ -18,7 +21,9 @@ import javax.json.JsonObject;
 import javax.json.JsonStructure;
 import javax.json.JsonValue;
 import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,11 +89,50 @@ public class ArchivesSpaceClient {
             return refCacheMap.get(refId);
         }
         LOGGER.debug("FETCHING " + refId);
-        JsonObject result = (JsonObject) makeGetRequest(baseUrl + refId);
+        JsonObject result = (JsonObject) makeSolrGetRequest(refId);
+        if (result == null)
+        {
+            result = (JsonObject) makeGetRequest(baseUrl + refId);
+        }
         if (refCacheMap != null) {
             refCacheMap.put(refId, result);
         }
         return(result);
+    }
+
+    private JsonStructure makeSolrGetRequest(final String refId) throws IOException {
+       // getQuery(minutesAgo) + " AND " + TYPES + ":repository", "id"
+        String solrQuery = "id:\""+refId+"\"";
+        Iterator<SolrDocument> recordIter;
+        try
+        {
+            recordIter = SolrHelper.getRecordsForQuery(solrUrl, solrQuery, "json", null);
+        }
+        catch (SolrServerException e)
+        {
+            throw new IOException("Accessing SolrServer", e);
+        }
+        String json = null;
+        while (recordIter.hasNext()) {
+            SolrDocument d = recordIter.next();
+            if (json == null) 
+            {
+                Object jObj = d.getFieldValue("json");
+                if (jObj instanceof String)
+                {
+                    json = (String)jObj;
+                }
+            }
+            else
+            {
+                throw new RuntimeException("Multiple records returned for id");
+            }
+        }
+        if (json == null) 
+        {
+            return null;
+        }
+        return Json.createReader(new StringReader(json)).read();
     }
 
     private JsonStructure makeGetRequest(final String url) throws IOException {
