@@ -37,7 +37,14 @@ public class IndexRecords {
 				"/repositories/7/resources/167 /repositories/7/resources/168 /repositories/7/resources/124 /repositories/7/resources/125 ";
     public static void main(String [] args) throws Exception {
         Properties p = new Properties();
-        try (FileInputStream fis = new FileInputStream("config.properties")) {
+        int argOffset = 0;
+        String filename = "config.properties";
+        if (args.length > 0 && args[0].endsWith(".properties"))
+        {
+            filename = args[0];
+            argOffset++;
+        }
+        try (FileInputStream fis = new FileInputStream(filename)) {
             p.load(fis);
         }
         ArchivesSpaceClient c = new ArchivesSpaceClient(
@@ -49,7 +56,7 @@ public class IndexRecords {
         final String host = p.getProperty("tracksysDbHost");
         final String user = p.getProperty("tracksysDbUsername");
         final String pass = p.getProperty("tracksysDbPassword");
-        final String v3Orv4 = p.getProperty("outputRecordType", "v3");
+        final String v3Orv4 = p.getProperty("outputRecordType", "v4");
         debugUse = p.getProperty("debugUse", null);
 
         final int intervalInMinutes = Integer.valueOf(p.getProperty("interval"));
@@ -71,7 +78,7 @@ public class IndexRecords {
         List<String> errorRefs = new ArrayList<>();
         List<String> expectedErrorRefs = new ArrayList<>();
         final Set<String> refsToUpdate = new LinkedHashSet<>();
-        if (args.length == 0) {
+        if (args.length == argOffset) {
             List<String> repos = findUpdatedRepositories(solrUrl, intervalInMinutes);
             for (String repoRef : repos) {
                 refsToUpdate.addAll(c.listAccessionIds(repoRef));
@@ -84,8 +91,8 @@ public class IndexRecords {
             LOGGER.info(refsToUpdate.size() + " records to regenerate.");
         } else {
             LOGGER.info("Reindexing items provided on the command line.");
-            for (String arg : args) {
-                refsToUpdate.add(arg);
+            for (int i = argOffset; i < args.length; i++) {
+                refsToUpdate.add(args[i]);
             }
         }
 
