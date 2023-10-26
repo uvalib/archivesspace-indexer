@@ -16,8 +16,10 @@ TO_DELETE_STAGING=results/to_delete_staging.ids
 PRODUCTION_SOLR_URL=http://v4-solr-production-replica-0-private.internal.lib.virginia.edu:8080/solr/test_core
 STAGING_SOLR_URL=http://virgo4-solr-staging-replica-0-private.internal.lib.virginia.edu:8080/solr/test_core
 SOLR_QUERY=/select?fl=id&q=data_source_f%3Aarchivespace&rows=5000
-PRODUCTION_S3_DELETE=s3://virgo4-ingest-production-inbound/doc-delete/default/2023/archivesspace_delete_production_`date +%Y%m%d`.ids
-STAGING_S3_DELETE=s3://virgo4-ingest-staging-inbound/doc-delete/default/2023/archivesspace_delete_staging_`date +%Y%m%d`.ids
+PRODUCTION_BUCKET_BASE=s3://virgo4-ingest-production-inbound/
+STAGING_BUCKET_BASE=s3://virgo4-ingest-staging-inbound/
+UPDATE_BUCKET=doc-update/default/$(YEAR)/aspace/
+DELETE_BUCKET_NAME=doc-delete/default/$(YEAR)/archivesspace_delete_`date +%Y%m%d`.ids
 
 build: 
 	$(MVN_CMD) clean install dependency:copy-dependencies -DskipTests
@@ -40,22 +42,22 @@ extract_all:
 	$(JAVA_CMD) $(JAVA_OPTS) -cp target/as-to-virgo-1.0-SNAPSHOT.jar:target/dependency/* edu.virginia.lib.indexing.tools.IndexRecords config_all.properties
 	
 
-upload-staging:
-	$(AWS_SYNC_CMD) s3://virgo4-ingest-staging-inbound/doc-update/default/$(YEAR)/aspace/ $(INDEX_STAGING_DIR)/ --exclude "*" --include "*.xml"
-	./copy_new_from_all.sh $(INDEX_STAGING_DIR) $(INDEX_DIR)
-	$(AWS_SYNC_CMD) $(INDEX_STAGING_DIR)/ s3://virgo4-ingest-staging-inbound/doc-update/default/$(YEAR)/aspace/ --delete --exclude "*" --include "*.xml"
-
 upload-production:
-	$(AWS_SYNC_CMD) s3://virgo4-ingest-production-inbound/doc-update/default/$(YEAR)/aspace/ $(INDEX_PRODUCTION_DIR)/ --exclude "*" --include "*.xml"
+	$(AWS_SYNC_CMD) $(PRODUCTION_BUCKET)$(UPDATE_BUCKET) $(INDEX_PRODUCTION_DIR)/ --exclude "*" --include "*.xml"
 	./copy_new_from_all.sh $(INDEX_PRODUCTION_DIR) $(INDEX_DIR)
-	$(AWS_SYNC_CMD) $(INDEX_PRODUCTION_DIR)/ s3://virgo4-ingest-production-inbound/doc-update/default/$(YEAR)/aspace/ --delete --exclude "*" --include "*.xml"
+	$(AWS_SYNC_CMD) $(INDEX_PRODUCTION_DIR)/ $(PRODUCTION_BUCKET)$(UPDATE_BUCKET) --delete --exclude "*" --include "*.xml"
+
+upload-staging:
+	$(AWS_SYNC_CMD) $(STAGING_BUCKET)$(UPDATE_BUCKET) $(INDEX_STAGING_DIR)/ --exclude "*" --include "*.xml"
+	./copy_new_from_all.sh $(INDEX_STAGING_DIR) $(INDEX_DIR)
+	$(AWS_SYNC_CMD) $(INDEX_STAGING_DIR)/ $(STAGING_BUCKET)$(UPDATE_BUCKET) --delete --exclude "*" --include "*.xml"
 
 check-deletes-production:
 	curl -s "$(PRODUCTION_SOLR_URL)$(SOLR_QUERY)" | egrep '"id":' | sed -e 's/^.*"id":"//' -e 's/".*$$//' | sort > results/in_solr_production.ids
 	find $(INDEX_DIR) -type f | sed -e 's/^.*as_/as_/' -e 's/.xml$$//' -e 's/_/:/' | sort > results/indexed.ids
 	diff --side-by-side results/in_solr_production.ids results/indexed.ids | egrep '<' | sed -e 's/[ \t].*$$//' > $(TO_DELETE_PRODUCTION)
 	if [[ -s  $(TO_DELETE_PRODUCTION) ]] ; then \
-	    aws s3 cp $(TO_DELETE_PRODUCTION) $(PRODUCTION_S3_DELETE); \
+	    aws s3 cp $(TO_DELETE_PRODUCTION) $(PRODUCTION_BUCKET)$(DELETE_BUCKET_NAME); \
 	fi
 
 check-deletes-staging:
@@ -63,7 +65,7 @@ check-deletes-staging:
 	find $(INDEX_DIR) -type f | sed -e 's/^.*as_/as_/' -e 's/.xml$$//' -e 's/_/:/' | sort > results/indexed.ids
 	diff --side-by-side results/in_solr_staging.ids results/indexed.ids | egrep '<' | sed -e 's/[ \t].*$$//' > $(TO_DELETE_STAGING)
 	if [[ -s  $(TO_DELETE_STAGING) ]] ; then \
-	    aws s3 cp $(TO_DELETE_STAGING) $(STAGING_S3_DELETE); \
+	    aws s3 cp $(TO_DELETE_STAGING) $(STAGING_BUCKET)$(DELETE_BUCKET_NAME); \
 	fi
 
 year:
