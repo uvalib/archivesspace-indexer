@@ -43,21 +43,21 @@ extract_all:
 	
 
 upload-production:
-	$(AWS_SYNC_CMD) $(PRODUCTION_BUCKET)$(UPDATE_BUCKET) $(INDEX_PRODUCTION_DIR)/ --exclude "*" --include "*.xml"
+	$(AWS_SYNC_CMD) $(PRODUCTION_BUCKET_BASE)$(UPDATE_BUCKET) $(INDEX_PRODUCTION_DIR)/ --exclude "*" --include "*.xml"
 	./copy_new_from_all.sh $(INDEX_PRODUCTION_DIR) $(INDEX_DIR)
-	$(AWS_SYNC_CMD) $(INDEX_PRODUCTION_DIR)/ $(PRODUCTION_BUCKET)$(UPDATE_BUCKET) --delete --exclude "*" --include "*.xml"
+	$(AWS_SYNC_CMD) $(INDEX_PRODUCTION_DIR)/ $(PRODUCTION_BUCKET_BASE)$(UPDATE_BUCKET) --delete --exclude "*" --include "*.xml"
 
 upload-staging:
-	$(AWS_SYNC_CMD) $(STAGING_BUCKET)$(UPDATE_BUCKET) $(INDEX_STAGING_DIR)/ --exclude "*" --include "*.xml"
+	$(AWS_SYNC_CMD) $(STAGING_BUCKET_BASE)$(UPDATE_BUCKET) $(INDEX_STAGING_DIR)/ --exclude "*" --include "*.xml"
 	./copy_new_from_all.sh $(INDEX_STAGING_DIR) $(INDEX_DIR)
-	$(AWS_SYNC_CMD) $(INDEX_STAGING_DIR)/ $(STAGING_BUCKET)$(UPDATE_BUCKET) --delete --exclude "*" --include "*.xml"
+	$(AWS_SYNC_CMD) $(INDEX_STAGING_DIR)/ $(STAGING_BUCKET_BASE)$(UPDATE_BUCKET) --delete --exclude "*" --include "*.xml"
 
 check-deletes-production:
 	curl -s "$(PRODUCTION_SOLR_URL)$(SOLR_QUERY)" | egrep '"id":' | sed -e 's/^.*"id":"//' -e 's/".*$$//' | sort > results/in_solr_production.ids
 	find $(INDEX_DIR) -type f | sed -e 's/^.*as_/as_/' -e 's/.xml$$//' -e 's/_/:/' | sort > results/indexed.ids
 	diff --side-by-side results/in_solr_production.ids results/indexed.ids | egrep '<' | sed -e 's/[ \t].*$$//' > $(TO_DELETE_PRODUCTION)
 	if [[ -s  $(TO_DELETE_PRODUCTION) ]] ; then \
-	    aws s3 cp $(TO_DELETE_PRODUCTION) $(PRODUCTION_BUCKET)$(DELETE_BUCKET_NAME); \
+	    aws s3 cp $(TO_DELETE_PRODUCTION) $(PRODUCTION_BUCKET_BASE)$(DELETE_BUCKET_NAME); \
 	fi
 
 check-deletes-staging:
@@ -65,7 +65,7 @@ check-deletes-staging:
 	find $(INDEX_DIR) -type f | sed -e 's/^.*as_/as_/' -e 's/.xml$$//' -e 's/_/:/' | sort > results/indexed.ids
 	diff --side-by-side results/in_solr_staging.ids results/indexed.ids | egrep '<' | sed -e 's/[ \t].*$$//' > $(TO_DELETE_STAGING)
 	if [[ -s  $(TO_DELETE_STAGING) ]] ; then \
-	    aws s3 cp $(TO_DELETE_STAGING) $(STAGING_BUCKET)$(DELETE_BUCKET_NAME); \
+	    aws s3 cp $(TO_DELETE_STAGING) $(STAGING_BUCKET_BASE)$(DELETE_BUCKET_NAME); \
 	fi
 
 year:
