@@ -1,6 +1,7 @@
 .idea
 target
 config.properties
+config_all.properties
 example.xml
 solr-output
 src/main/java/edu/virginia/lib/indexing/localtools/
