@@ -28,11 +28,14 @@ RUN mkdir config scripts
 COPY Makefile ./
 COPY config/config.properties.template ./config/
 COPY package/scripts/make-config.sh ./scripts/
-COPY package/scripts/entry.sh ./scripts/
+COPY package/scripts/incremental-extract.ksh ./scripts/
+COPY package/scripts/full-extract.ksh ./scripts/
 
 # copy the built assets
 COPY --from=builder /build/target ./target
 
+# default run command
+CMD ["bash"]
 
 #
 # end of file

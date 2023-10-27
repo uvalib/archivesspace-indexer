@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 #
-# entrypoint for the container
+# script for the incremental extract
 #
 
 # generate the config file
 ./scripts/make-config.sh
 
+# kind of a hack
+if [ -d /mnt/crontab-runner/results ]; then
+   ln -s /mnt/crontab-runner/results .
+fi
+
 # generate the ArchivesSpace extract
 make dirs
-make clean
 make extract
 res=$?
 if [ ${res} -ne 0 ]; then
