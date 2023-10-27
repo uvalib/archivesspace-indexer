@@ -25,11 +25,9 @@ RUN yum -y update && yum -y install make awscli
 
 WORKDIR /archivesspace-virgo
 RUN mkdir config scripts
-COPY Makefile ./
+COPY Makefile copy_new_from_all.sh ./
 COPY config/config.properties.template ./config/
-COPY package/scripts/make-config.sh ./scripts/
-COPY package/scripts/incremental-extract.ksh ./scripts/
-COPY package/scripts/full-extract.ksh ./scripts/
+COPY package/scripts/make-config.sh package/scripts/incremental-extract.ksh package/scripts/full-extract.ksh ./scripts/
 
 # copy the built assets
 COPY --from=builder /build/target ./target
