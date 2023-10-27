@@ -21,7 +21,7 @@ FROM public.ecr.aws/docker/library/amazoncorretto:17-al2023-jdk
 ENV JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64
 
 # so we can install new packages
-RUN yum -y update && yum -y install make awscli findutils
+RUN yum -y update && yum -y install make awscli findutils diffutils
 
 WORKDIR /archivesspace-virgo
 RUN mkdir config scripts
