@@ -36,7 +36,7 @@ clean:
 extract:
 	$(JAVA_CMD) $(JAVA_OPTS) -cp target/as-to-virgo-1.0-SNAPSHOT.jar:target/dependency/* edu.virginia.lib.indexing.tools.IndexRecords config.properties
 
-extract_all:
+extract-all:
 	rm -f $(INDEX_DIR)/*.xml
 	cat config.properties | sed -e 's/interval:.*/interval:-1/' > config_all.properties
 	$(JAVA_CMD) $(JAVA_OPTS) -cp target/as-to-virgo-1.0-SNAPSHOT.jar:target/dependency/* edu.virginia.lib.indexing.tools.IndexRecords config_all.properties
