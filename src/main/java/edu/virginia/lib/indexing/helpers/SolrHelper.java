@@ -80,9 +80,17 @@ public class SolrHelper {
                     try {
                         response = solr.query(p);
                         int numRetrieved = response.getResults().size();
+                        long totalNumber = response.getResults().getNumFound();
                         start += numRetrieved;
                         if (label != null && (numRetrieved > 0 || start == 0)) {
-                            LOGGER.info(label+" records retrieved from solr : "+ start);
+                            if (start < totalNumber) 
+                            {
+                                LOGGER.debug(label+" records retrieved from solr : "+ start);
+                            }
+                            else
+                            {
+                                LOGGER.info(label+" records retrieved from solr : "+ start);
+                            }
                         }
                         index = 0;
                     } catch (SolrServerException e) {

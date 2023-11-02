@@ -5,11 +5,11 @@
         </encoder>
     </appender>
 
-    <logger name="edu.virginia.lib" additivity="false" level="DEBUG">
+    <logger name="edu.virginia.lib" additivity="false" level="INFO">
         <appender-ref ref="CONSOLE"/>
     </logger>
 
-    <root level="DEBUG">
+    <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
 </configuration>
