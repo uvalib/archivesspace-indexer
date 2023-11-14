@@ -7,6 +7,8 @@ import javax.json.JsonValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.virginia.lib.indexing.tools.IndexRecords;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -46,7 +48,8 @@ public class ASpaceAccession extends ASpaceObject {
     }
 
     public boolean isPublished() {
-        boolean published = getRecord().getBoolean("publish");
+        JsonObject record = getRecord();
+        boolean published = record.getBoolean("publish");
         boolean hasTopContainers = !getTopContainers().isEmpty();
         boolean hasPublishedDigitalObjects = !getDigitalObjects().isEmpty();
         LOGGER.debug("publish value = "+published);
@@ -64,8 +67,24 @@ public class ASpaceAccession extends ASpaceObject {
         String uri = getRecord().getString("uri");
         for (JsonValue v : relatedResources) {
             ASpaceCollection col = new ASpaceCollection(c, ((JsonObject) v).getString("ref"));
-            if (col.isPublished()) {
-                return true;
+            try
+            {
+                if (col.isPublished()) {
+                    return true;
+                }
+            }
+            catch (RuntimeException e)
+            {
+                if (e.getMessage().startsWith("Unable to get") && IndexRecords.knownBadRefs.contains(" "+col.refId+" "))
+                {
+                    LOGGER.info("Known Bad Resource "+ col.refId+ " Referenced as Related Resource from "+ this.refId);
+                    return false;
+                }
+                else
+                {
+                    LOGGER.error("Non-existant Resource "+ col.refId+ " Referenced as Related Resource from "+ this.refId);
+                    return false;
+                }
             }
         }
         return false;
