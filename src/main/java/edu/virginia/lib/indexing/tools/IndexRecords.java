@@ -33,8 +33,7 @@ public class IndexRecords {
     private static final Logger LOGGER = LoggerFactory.getLogger(IndexRecords.class);
     public static String debugUse = null;
     
-    public final static String knownBadRefs = " /repositories/7/resources/174 /repositories/3/accessions/1274 /repositories/7/resources/155 "+
-				"/repositories/7/resources/167 /repositories/7/resources/168 /repositories/7/resources/124 /repositories/7/resources/125 ";
+    public final static String knownBadRefs = " /repositories/3/accessions/1274  /repositories/7/resources/915 ";
     public static void main(String [] args) throws Exception {
         Properties p = new Properties();
         int argOffset = 0;

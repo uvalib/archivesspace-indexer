@@ -92,6 +92,7 @@ public class ArchivesSpaceClient {
         JsonObject result = (JsonObject) makeSolrGetRequest(refId);
         if (result == null)
         {
+            LOGGER.warn("Failed to fetch ref from solr " + refId);
             result = (JsonObject) makeGetRequest(baseUrl + refId);
         }
         if (refCacheMap != null) {
