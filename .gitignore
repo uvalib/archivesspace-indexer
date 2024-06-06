@@ -1,6 +1,7 @@
 .idea
 target
 config.properties
+params.properties
 config_all.properties
 example.xml
 solr-output

@@ -33,6 +33,10 @@ dirs:
 clean:
 	-rm -rf $(INDEX_DIR)/*
 
+make-config:
+	-mv config.properties config.properties.prev
+	bin/make_config_from_template_and_params > config.properties
+
 extract:
 	$(JAVA_CMD) $(JAVA_OPTS) -cp target/as-to-virgo-1.0-SNAPSHOT.jar:target/dependency/* edu.virginia.lib.indexing.tools.IndexRecords config.properties
 
