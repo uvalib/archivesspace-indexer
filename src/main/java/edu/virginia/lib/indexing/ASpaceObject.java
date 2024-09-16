@@ -1,6 +1,7 @@
 package edu.virginia.lib.indexing;
 
 import edu.virginia.lib.indexing.helpers.JsonHelper;
+import edu.virginia.lib.indexing.helpers.KeyValues;
 import edu.virginia.lib.indexing.helpers.SolrHelper;
 import edu.virginia.lib.indexing.helpers.StringNaturalCompare;
 import edu.virginia.lib.indexing.tools.IndexRecords;
@@ -88,6 +89,12 @@ public abstract class ASpaceObject {
     protected List<ASpaceTopContainer> containersSolr;
 
     protected List<ASpaceDigitalObject> digitalObjectsSolr;
+
+    protected List<ASpaceArchivalObject> archivalObjects;
+
+    protected List<ASpaceArchivalObject> archivalObjectsTree;
+
+    protected List<ASpaceArchivalObject> archivalObjectsSolr;
 
     private List<ASpaceArchivalObject> children;
 
@@ -233,7 +240,7 @@ public abstract class ASpaceObject {
        
         return digitalObjects;
     }
-
+    
     protected String getDigitalObjectQuery() {
 //      primary_type:"archival_object"  AND 
 //      ancestors:"/repositories/3/resources/488" AND 
@@ -256,6 +263,88 @@ public abstract class ASpaceObject {
         }
         return(query);
     }
+    
+    public List<ASpaceArchivalObject> getArchivalObjects()  {
+        if (IndexRecords.debugUse != null) {
+            parseInstances();
+        }
+
+        if (archivalObjectsSolr == null || IndexRecords.debugUse != null) {
+            archivalObjectsSolr = new ArrayList<>();
+            Iterator<SolrDocument> docs;
+            try {
+                docs = SolrHelper.getRecordsForQuery(c.getSolrUrl(), getArchivalObjectQuery(), "uri,title,summary", "archival_objects");
+                while (docs.hasNext()) {
+                    SolrDocument d = docs.next();
+                    String ao_uri = d.getFieldValue("uri").toString();
+                    String ao_title = d.getFieldValue("title").toString();
+                    String ao_summary = d.getFieldValue("summary") != null ? d.getFieldValue("summary").toString() : "";
+                    ASpaceArchivalObject asao = new ASpaceArchivalObject(this.c, ao_uri, new KeyValues("uri", ao_uri), new KeyValues("title", ao_title), new KeyValues("summary", ao_summary));
+                    archivalObjectsSolr.add(asao);
+                }
+            }
+            catch (SolrServerException e) {
+                throw new RuntimeException(e);
+            }
+            catch (IOException e)  {
+                throw new RuntimeException(e);
+            }
+        }
+        
+        if (IndexRecords.debugUse != null) {
+            if (digitalObjectsSolr.size() != digitalObjectsTree.size()) {
+                LOGGER.warn(">>>>>>> different count of digitalObjects: solr = "+ digitalObjectsSolr.size()+
+                        "  tree = " + digitalObjectsTree.size()+ " <<<<<<<<<<");
+            }
+            else { 
+                boolean gotEmAll = true;
+                Set<String> tcSet = new LinkedHashSet<>();
+                for (ASpaceDigitalObject astc : digitalObjectsSolr) {
+                    String ref = astc.getId();
+                    tcSet.add(ref);
+                }
+                for (ASpaceDigitalObject astt : digitalObjectsTree) {
+                    String ref = astt.getId();
+                    if (!tcSet.contains(ref)) {
+                        gotEmAll = false;
+                    }
+                }
+                if (! gotEmAll ) {
+                    LOGGER.warn(">>>>>>>>>>>>>>>>>>>>>>>>>> different list of digitalObjects <<<<<<<<<<<<<<<<<<<<<<<<<<<");
+                }
+            }
+        }
+        
+        archivalObjects = archivalObjectsSolr;
+       
+        return archivalObjects;
+    }
+
+    protected String getArchivalObjectQuery() {
+//      primary_type:"archival_object"  AND 
+//      resource:"/repositories/3/resources/1438"  AND 
+//      repository:"/repositories/3"  AND 
+//      suppressed:false AND 
+//      publish:true AND 
+//      -types:"pui"
+        String uri = getRecord().getString("uri");
+        String query = "";
+        JsonValue repositoryJV = getRecord().get("repository");
+        String repository = null;
+        if (repositoryJV != null && repositoryJV.getValueType() == JsonValue.ValueType.OBJECT) {
+            repository = ((JsonObject)repositoryJV).getString("ref");
+        }
+        if (uri.contains("resources")) {
+            query = "(primary_type:\"archival_object\" AND  resource:\"" + uri + "\" AND repository:\"" + repository + "\"" +
+                            " AND publish:\"true\" AND -types:\"pui\")";
+        }
+        else if (uri.contains("accessions")) {
+            query = "(primary_type:\"archival_object\" AND  resource:\"" + uri + "\" AND repository:\"" + repository + "\"" +
+                    " AND publish:\"true\" AND -types:\"pui\")";
+        }
+        return(query);
+    }
+
 
     public List<ASpaceTopContainer> getTopContainers() {
         if (IndexRecords.debugUse != null) {
@@ -849,6 +938,21 @@ public abstract class ASpaceObject {
                 addField(xmlOut, "access_note_tsearch_stored", restrictionsStr);
             }
             
+            // get nested ArchivalObject Metadata
+            final List<ASpaceArchivalObject> aos = this.getArchivalObjects();
+            if (aos != null) {
+                for (ASpaceArchivalObject ao : aos) {
+                    List<String> titles = ao.getRecordValues("title");
+                    for (String sub_title: titles) {
+                        addField(xmlOut, "title_added_entry_tsearch_stored", sub_title);
+                    }
+                    List<String> summarys = ao.getRecordValues("summary");
+                    for (String sub_summarys: summarys) {
+                        addField(xmlOut, "contained_item_summary_tsearch_stored", sub_summarys);
+                    }
+                }
+            }
+            
             // linked agents
             final JsonValue agents = getRecord().get("linked_agents");
             if (agents != null && agents.getValueType() == JsonValue.ValueType.ARRAY) {
@@ -1103,13 +1207,13 @@ public abstract class ASpaceObject {
             final JsonString rsJsonUri = iiifManifest.getJsonString("license");
             if (rsJsonUri != null)
             {
-            	final String rsUri = rsJsonUri.getString();
+                final String rsUri = rsJsonUri.getString();
                 addRightsFields(rsUri, xmlOut, shortManifestId, dbHost, dbUser, dbPassword);
             }
             addField(xmlOut, "alternate_id_f_stored", shortManifestId);
             if (iiifManifest.getJsonString("label") != null)
             {
-            	addField(xmlOut, "individual_call_number_display", iiifManifest.getString("label"));
+                addField(xmlOut, "individual_call_number_display", iiifManifest.getString("label"));
             }
             if (thumbnail) {
                 String thumbnailUrl = iiifManifest.getJsonArray("sequences").getJsonObject(0).getJsonArray("canvases").getJsonObject(0).getString("thumbnail");
@@ -1131,6 +1235,7 @@ public abstract class ASpaceObject {
             throw new RuntimeException("Unable to parse IIIF manifest at " + manifestUrl);
         }
     }
+    
     
     private static void addDigitalImagesV4(final String manifestUrl, final XMLStreamWriter xmlOut, boolean thumbnail, final String dbHost, final String dbUser, final String dbPassword) throws IOException, XMLStreamException, SQLException {
         HttpGet httpGet = new HttpGet(manifestUrl);
