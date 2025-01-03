@@ -135,11 +135,22 @@ public class ASpaceTopContainer extends ASpaceObject {
     }
 
     public String getLocation() {
-//        JsonValue room = getRecord().get("room");
-//        if (room == null) {
+        JsonObject record = getRecord();
+        JsonArray currentLocation = record.getJsonArray("container_locations");
+        int size = currentLocation.size();
+        JsonValue room = null;
+        if (size > 0) {
+            JsonObject loc1 = (JsonObject) currentLocation.get(0); 
+            JsonObject loc_res = (JsonObject)loc1.get("_resolved");
+            room = loc_res.get("building");
+        }
+        else {
+            room = record.get("display_string");
+        }
+        if (room == null) {
             return "STACKS";
-//        } else {
-//            return room.toString();
-//        }
+        } else {
+            return room.toString();
+        }
     }
 }
