@@ -2,6 +2,7 @@ package edu.virginia.lib.indexing;
 
 import javax.json.JsonArray;
 import javax.json.JsonObject;
+import javax.json.JsonString;
 import javax.json.JsonValue;
 import java.io.IOException;
 import java.util.Collections;
@@ -139,18 +140,25 @@ public class ASpaceTopContainer extends ASpaceObject {
         JsonArray currentLocation = record.getJsonArray("container_locations");
         int size = currentLocation.size();
         JsonValue room = null;
+        String roomStr = null;
         if (size > 0) {
             JsonObject loc1 = (JsonObject) currentLocation.get(0); 
             JsonObject loc_res = (JsonObject)loc1.get("_resolved");
             room = loc_res.get("building");
+            roomStr = ((JsonString)room).getString();
         }
         else {
             room = record.get("display_string");
+            roomStr = ((JsonString)room).getString();
+            if (roomStr.matches(".*\\[[^]]*\\].*"))
+            {
+                roomStr = roomStr.replaceFirst(".*\\[([^]]*)\\].*", "$1");
+            }
         }
-        if (room == null) {
+        if (roomStr == null) {
             return "STACKS";
         } else {
-            return room.toString();
+            return roomStr;
         }
     }
 }
