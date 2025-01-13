@@ -4,7 +4,7 @@
 
 MVN_CMD = mvn
 JAVA_CMD = java
-JAVA_OPTS = -Xms512M -Xmx512M
+JAVA_OPTS = -Xms1024M -Xmx1024M
 AWS_SYNC_CMD = aws s3 sync
 YEAR = `date +%Y`
 INDEX_DIR=results/index-v4
