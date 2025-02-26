@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -24,6 +25,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+
+import javax.json.JsonObject;
 
 /**
  * Created by md5wz on 1/12/18.
@@ -77,16 +80,37 @@ public class IndexRecords {
         List<String> errorRefs = new ArrayList<>();
         List<String> expectedErrorRefs = new ArrayList<>();
         final Set<String> refsToUpdate = new LinkedHashSet<>();
+        final Set<String> allValidUpdatableRefs = new LinkedHashSet<>();
+        
         if (args.length == argOffset) {
-            List<String> repos = findUpdatedRepositories(solrUrl, intervalInMinutes);
+            List<String> repos = findUpdatedRepositories(solrUrl, -1);  // Get list of all possible Valid Updateable Refs
+            int totalNum = 0;
+            for (String repoRef : repos) {
+                allValidUpdatableRefs.addAll(c.listAccessionIds(repoRef));
+                allValidUpdatableRefs.addAll(c.listResourceIds(repoRef));
+                int numAdded = allValidUpdatableRefs.size() - totalNum;
+                totalNum = allValidUpdatableRefs.size();
+                LOGGER.info(numAdded + " contained accessions and resources could be updated if repository " + repoRef + " were updated.");
+            }
+            totalNum = 0;
+            repos = findUpdatedRepositories(solrUrl, intervalInMinutes);
             for (String repoRef : repos) {
                 refsToUpdate.addAll(c.listAccessionIds(repoRef));
                 refsToUpdate.addAll(c.listResourceIds(repoRef));
-                LOGGER.info(refsToUpdate.size() + " contained accessions and resources will be updated because repository " + repoRef + " was updated.");
+                int numAdded = refsToUpdate.size() - totalNum;
+                totalNum = refsToUpdate.size();
+                LOGGER.info(numAdded + " contained accessions and resources will be updated because repository " + repoRef + " was updated.");
             }
-            final Set<String> updatedRefs = findUpdatedRecordsToReindex(solrUrl, intervalInMinutes);
+            final Set<String> updatedRefs = findUpdatedRecordsToReindex(c, solrUrl, intervalInMinutes, allValidUpdatableRefs);
             LOGGER.info(updatedRefs.size() + " accessions and resources had individual updates");
-            refsToUpdate.addAll(updatedRefs);
+            for (String ref : updatedRefs) {
+                if (allValidUpdatableRefs.contains(ref)) {
+                    refsToUpdate.add(ref);
+                }
+                else {
+                    LOGGER.warn("Possible bad ref :" + ref);
+                }
+            }
             LOGGER.info(refsToUpdate.size() + " records to regenerate.");
         } else {
             LOGGER.info("Reindexing items provided on the command line.");
@@ -163,20 +187,34 @@ public class IndexRecords {
 
     // http://archivesspace01.lib.virginia.edu:8090/collection1/select?q=user_mtime:[NOW-100DAY%20TO%20NOW]&wt=xml&indent=true&facet=true&facet.field=types
     // &fl=id,types,ancestors,linked_instance_uris,related_accession_uris,collection_uri_u_sstr
-    private static Set<String> findUpdatedRecordsToReindex(final String solrUrl, int minutesAgo) throws SolrServerException {
+    private static Set<String> findUpdatedRecordsToReindex(ArchivesSpaceClient c, final String solrUrl, int minutesAgo, Set<String> allValidUpdatableRefs) throws SolrServerException {
         final Set<String> refIds = new HashSet<>();
         Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(minutesAgo) + " AND (types:resource OR types:archival_object OR types:top_container)", 
                                                                        "types,id,related_accession_uris,ancestors,collection_uri_u_sstr", "modified objects");
         while (updated.hasNext()) {
             SolrDocument d = updated.next();
+            String id = (String) d.getFirstValue("id");
             if (hasFieldValue(d, TYPES, "resource")) {
                 // all directly updated resource records
-                refIds.add((String) d.getFirstValue("id"));
+                if (allValidUpdatableRefs.contains(id)) {
+                    refIds.add(id);
+                }
+                else {
+                    LOGGER.warn("SolrDocument with ID: "+id+" references top level item that doesn't exist");
+                    errorCheck(c, id);
+                }
                 // add all affected related accessions (they might have to be hidden or something)
                 final Collection<Object> values = d.getFieldValues("related_accession_uris");
                 if (values != null) {
-                    for (Object ref : values) {
-                        refIds.add((String) ref);
+                    for (Object refo : values) {
+                        String ref = (String)refo;
+                        if (allValidUpdatableRefs.contains(ref)) {
+                            refIds.add(ref);
+                        }
+                        else {
+                            LOGGER.warn("SolrDocument with ID: "+id+" references accession uri: " + ref + " that doesn't exist");
+                            errorCheck(c, id);
+                        }
                     }
                 }
             } else if (hasFieldValue(d, TYPES, "archival_object")) {
@@ -184,15 +222,28 @@ public class IndexRecords {
                 for (Object a : d.getFieldValues("ancestors")) {
                     String ancestor = (String) a;
                     if (ASpaceCollection.isCorrectIdFormat(ancestor)) {
-                        refIds.add(ancestor);
+                        if (allValidUpdatableRefs.contains(ancestor)) {
+                            refIds.add(ancestor);
+                        }
+                        else {
+                            LOGGER.warn("SolrDocument with ID: "+ id +" references accession uri: " + ancestor + " that doesn't exist");
+                            errorCheck(c, id);
+                        }
                     }
                 }
             } else if (hasFieldValue(d, TYPES, "top_container")) {
                 // plus all records that may have an updated or added top_container (this may include accession records)
                 final Collection<Object> values = d.getFieldValues("collection_uri_u_sstr");
                 if (values != null) {
-                    for (Object ref : values) {
-                        refIds.add((String) ref);
+                    for (Object refo : values) {
+                        String ref = (String)refo;
+                        if (allValidUpdatableRefs.contains(ref)) {
+                            refIds.add(ref);
+                        }
+                        else {
+                            LOGGER.warn("SolrDocument with ID: "+id+" references collection_uri: " + ref + " that doesn't exist");
+                            errorCheck(c, id);
+                        }
                     }
                 }
             }
@@ -200,6 +251,29 @@ public class IndexRecords {
         return refIds;
     }
 
+    private static void errorCheck(ArchivesSpaceClient c, String refId) {
+        JsonObject joAPI = null;
+        JsonObject joSolr = null;
+        try{ 
+            joAPI = (JsonObject)c.makeGetRequestId(refId);
+        }
+        catch (IOException ioe) {
+            LOGGER.warn("IOException retrieving " + refId + " via API");
+        }
+        catch (RuntimeException re) {
+            LOGGER.warn("RuntimeException 404 Not Found retrieving " + refId + " via API");
+        }
+        try{ 
+            joSolr = (JsonObject)c.makeSolrGetRequest(refId);
+        }
+        catch (IOException ioe) {
+            LOGGER.warn("IOException retrieving " + refId + " via Solr");
+        }
+        if (joSolr != null && joAPI == null) {
+            LOGGER.warn("Item in Solr index, but not in API : "+ refId);
+        }
+    }
+    
     private static List<String> findUpdatedRepositories(final String solrUrl, int minutesAgo) throws SolrServerException {
         final List<String> refIds = new ArrayList<>();
         Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(minutesAgo) + " AND " + TYPES + ":repository", "id", "repository");
