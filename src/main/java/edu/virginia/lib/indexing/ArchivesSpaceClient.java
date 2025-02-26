@@ -93,7 +93,7 @@ public class ArchivesSpaceClient {
         if (result == null)
         {
             LOGGER.warn("Failed to fetch ref from solr " + refId);
-            result = (JsonObject) makeGetRequest(baseUrl + refId);
+            result = (JsonObject) makeGetRequestId(refId);
         }
         if (refCacheMap != null) {
             refCacheMap.put(refId, result);
@@ -101,7 +101,7 @@ public class ArchivesSpaceClient {
         return(result);
     }
 
-    private JsonStructure makeSolrGetRequest(final String refId) throws IOException {
+    public JsonStructure makeSolrGetRequest(final String refId) throws IOException {
        // getQuery(minutesAgo) + " AND " + TYPES + ":repository", "id"
         String solrQuery = "id:\""+refId+"\"";
         Iterator<SolrDocument> recordIter;
@@ -136,7 +136,7 @@ public class ArchivesSpaceClient {
         return Json.createReader(new StringReader(json)).read();
     }
 
-    private JsonStructure makeGetRequest(final String url) throws IOException {
+    public JsonStructure makeGetRequest(final String url) throws IOException {
         HttpGet httpGet = new HttpGet(url);
         httpGet.addHeader("X-ArchivesSpace-Session", sessionToken);
         try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
@@ -149,6 +149,10 @@ public class ArchivesSpaceClient {
             }
             return Json.createReader(response.getEntity().getContent()).read();
         }
+    }
+    
+    public JsonStructure makeGetRequestId(final String refId) throws IOException {
+        return this.makeGetRequest(baseUrl + refId);
     }
 
     private void authenticate(final String username, final String password) throws IOException {
