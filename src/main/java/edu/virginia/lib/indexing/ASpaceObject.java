@@ -1112,10 +1112,8 @@ public abstract class ASpaceObject {
             addField(xmlOut, "note_tsearch_stored", noteText.toString());
         }
 
-//        addField(xmlOut, "url_supp_a", "https://archives.lib.virginia.edu" + getRecord().getString("uri"));
-//        addField(xmlOut, "url_label_supp_a", "GUIDE TO THE COLLECTION AVAILABLE ONLINE");
         addField(xmlOut, "url_str_stored", "https://archives.lib.virginia.edu" + getRecord().getString("uri"));
-        addField(xmlOut, "url_label_str_stored", "GUIDE TO THE COLLECTION AVAILABLE ONLINE");
+        addField(xmlOut, "url_label_str_stored", "View a guide to this collection");
 
         // A feature_facet is needed for proper display in Virgo.
 //        addField(xmlOut, "feature_facet", "suppress_endnote_export");
