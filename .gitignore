@@ -1,12 +1,12 @@
 .idea
 target
 config.properties
+config.properties.prev
 params.properties
 config_all.properties
 example.xml
 solr-output
 src/main/java/edu/virginia/lib/indexing/localtools/
-bin
 results
 .project
 .classpath

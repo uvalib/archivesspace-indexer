@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# source helpers
+export FULL_NAME=$(realpath $0)
+export SCRIPT_DIR=$(dirname ${FULL_NAME})
+export TOP_DIR=$(dirname $SCRIPT_DIR)
+
+. ${TOP_DIR}/params.properties
+
+#/lib_content23/solr73_virgo4/terraform-infrastructure/scripts/resolve-private.ksh solr-04-production.private.production
+export ARCHIVESSPACE_SOLR_URL=`$SCRIPT_DIR/resolve-private.ksh solr-04-production.private.production | sed -e 's#.*:[ ]*\(.*\)#http://\1:8080/solr/archivesspace#'`
+
+#/lib_content23/solr73_virgo4/terraform-infrastructure/scripts/resolve-private.ksh archivesspace-production.private.production
+export ARCHIVESSPACE_URL=`$SCRIPT_DIR/resolve-private.ksh archivesspace-production.private.production | sed -e 's#.*:[ ]*\(.*\)#http://\1:8089/#'`
+
+
+sed -e "s#\${AVALON_SOLR_URL}#${AVALON_SOLR_URL}#g; s#\${ARCHIVESSPACE_SOLR_URL}#${ARCHIVESSPACE_SOLR_URL}#g" \
+    -e "s#\${AGE_INTERVAL}#${AGE_INTERVAL}#g; s#\${ARCHIVESSPACE_URL}#${ARCHIVESSPACE_URL}#g" \
+    -e "s#\${ARCHIVESSPACE_USER}#${ARCHIVESSPACE_USER}#g; s#\${ARCHIVESSPACE_PASSWORD}#${ARCHIVESSPACE_PASSWORD}#g" \
+    -e "s#\${TRACKSYS_DBHOST}#${TRACKSYS_DBHOST}#g; s#\${TRACKSYS_DBUSER}#${TRACKSYS_DBUSER}#g" \
+    -e "s#\${TRACKSYS_DBPASSWD}#${TRACKSYS_DBPASSWD}#g"  $TOP_DIR/config/config.properties.template 
