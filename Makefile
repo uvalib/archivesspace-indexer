@@ -4,8 +4,8 @@
 
 MVN_CMD=mvn
 JAVA_CMD=java
-JAVA_OPTS="-Xms2048M -Xmx2048M"
-AWS_SYNC_CMD="aws s3 sync"
+JAVA_OPTS=-Xms2048M -Xmx2048M
+AWS_SYNC_CMD=aws s3 sync
 YEAR=`date +%Y`
 INDEX_DIR=results/index-v4
 INDEX_PRODUCTION_DIR=results/index-uploaded-production
@@ -15,7 +15,7 @@ TO_DELETE_STAGING=results/to_delete_staging.ids
 
 PRODUCTION_SOLR_URL=http://v4-solr-production-replica-0-private.internal.lib.virginia.edu:8080/solr/test_core
 STAGING_SOLR_URL=http://virgo4-solr-staging-replica-0-private.internal.lib.virginia.edu:8080/solr/test_core
-SOLR_QUERY="/select?fl=id&q=data_source_f%3Aarchivespace&rows=5000"
+SOLR_QUERY=/select?fl=id&q=data_source_f%3Aarchivespace&rows=5000
 PRODUCTION_BUCKET_BASE=s3://virgo4-ingest-production-inbound/
 STAGING_BUCKET_BASE=s3://virgo4-ingest-staging-inbound/
 UPDATE_BUCKET=doc-update/default/${YEAR}/aspace/
