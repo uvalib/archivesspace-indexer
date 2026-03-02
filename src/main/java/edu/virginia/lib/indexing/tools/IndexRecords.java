@@ -63,14 +63,24 @@ public class IndexRecords {
         final int intervalInMinutes = Integer.valueOf(p.getProperty("interval"));
 
         final File output = new File(p.getProperty("indexOutputDir"));
+        if (!output.exists()) {
+        	LOGGER.error("Specified indexOutputDir (\"" + output + "\") does not exit!");
+        	System.exit(-1);
+        }
+        
         final File marcOutput = new File(p.getProperty("marcOutputDir"));
+        if (!marcOutput.exists()) {
+        	LOGGER.error("Specified marcOutputDir (\"" + marcOutput + "\") does not exit!");
+        	System.exit(-1);
+        }
+        
         final File marcXmlOutput = new File(p.getProperty("marcXmlOutputDir"));
-//        final File logs = new File(p.getProperty("logOutputDir"));
+        if (!marcXmlOutput.exists()) {
+        	LOGGER.error("Specified marcXmlOutputDir (\"" + marcXmlOutput + "\") does not exit!");
+        	System.exit(-1);
+        }
 
         final String solrUrl = p.getProperty("archivesSpaceSolrUrl");
-
-//        final File report = new File(logs, new SimpleDateFormat("yyyy-MM-dd-").format(new Date()) + "updated.txt");
-//        final PrintWriter published = new PrintWriter(new OutputStreamWriter(new FileOutputStream(report, true)));
 
         final long start = System.currentTimeMillis();
         LOGGER.info("Started at " + new Date());
