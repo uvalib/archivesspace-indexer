@@ -1,15 +1,29 @@
 package edu.virginia.lib.indexing.helpers;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpression;
+import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
+
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.HttpSolrServer;
-import org.apache.solr.client.solrj.impl.XMLResponseParser;
+import org.apache.solr.client.solrj.impl.Http2SolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -19,22 +33,6 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import edu.virginia.lib.indexing.tools.IndexRecords;
-
-import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathConstants;
-import javax.xml.xpath.XPathExpression;
-import javax.xml.xpath.XPathExpressionException;
-import javax.xml.xpath.XPathFactory;
-import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 /**
  * Static methods to interact with a Solr server's HTTP API.
  */
@@ -42,22 +40,7 @@ public class SolrHelper {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SolrHelper.class);
     
-    private static SolrServer solrserver = null;
-    
-    private static SolrServer getSolrServer(String solrUrl) {
-        if (solrserver == null) {
-            solrserver = new HttpSolrServer(solrUrl);
-        }
-        return solrserver;
-    }
-
-//    public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query) throws SolrServerException {
-//        return getRecordsForQuery(solrUrl, query, null, null);
-//    }
-    
-    public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query, String fieldList, String label) throws SolrServerException {
-        SolrServer solr = getSolrServer(solrUrl);
-        ((HttpSolrServer) solr).setParser(new XMLResponseParser());
+    public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query, String fieldList, String label) throws IOException {
         int start = 0;
         final ModifiableSolrParams p = new ModifiableSolrParams();
         p.set("q", new String[] { query });
@@ -77,8 +60,11 @@ public class SolrHelper {
                 if (response == null || response.getResults().size() <= index) {
                     p.set("rows", 5000);
                     p.set("start", start);
-                    try {
-                        response = solr.query(p);
+                    try (SolrClient client = new Http2SolrClient.Builder(solrUrl)
+                            .withConnectionTimeout(10000, TimeUnit.MILLISECONDS)
+                            .withIdleTimeout(60000, TimeUnit.MILLISECONDS)
+                            .build()){
+                        response = client.query(p);
                         int numRetrieved = response.getResults().size();
                         long totalNumber = response.getResults().getNumFound();
                         start += numRetrieved;
@@ -95,7 +81,9 @@ public class SolrHelper {
                         index = 0;
                     } catch (SolrServerException e) {
                         throw new RuntimeException(e);
-                    }
+                    } catch (IOException e) {
+						throw new RuntimeException(e);
+					}
                 }
                 return response.getResults().size() > index;
             }

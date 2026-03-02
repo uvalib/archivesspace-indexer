@@ -4,7 +4,6 @@ import edu.virginia.lib.indexing.ASpaceCollection;
 import edu.virginia.lib.indexing.ASpaceObject;
 import edu.virginia.lib.indexing.ArchivesSpaceClient;
 import edu.virginia.lib.indexing.helpers.SolrHelper;
-import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.common.SolrDocument;
 import org.marc4j.MarcStreamWriter;
 import org.marc4j.MarcXmlWriter;
@@ -187,7 +186,7 @@ public class IndexRecords {
 
     // http://archivesspace01.lib.virginia.edu:8090/collection1/select?q=user_mtime:[NOW-100DAY%20TO%20NOW]&wt=xml&indent=true&facet=true&facet.field=types
     // &fl=id,types,ancestors,linked_instance_uris,related_accession_uris,collection_uri_u_sstr
-    private static Set<String> findUpdatedRecordsToReindex(ArchivesSpaceClient c, final String solrUrl, int minutesAgo, Set<String> allValidUpdatableRefs) throws SolrServerException {
+    private static Set<String> findUpdatedRecordsToReindex(ArchivesSpaceClient c, final String solrUrl, int minutesAgo, Set<String> allValidUpdatableRefs) throws IOException {
         final Set<String> refIds = new HashSet<>();
         Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(minutesAgo) + " AND (types:resource OR types:archival_object OR types:top_container)", 
                                                                        "types,id,related_accession_uris,ancestors,collection_uri_u_sstr", "modified objects");
@@ -274,7 +273,7 @@ public class IndexRecords {
         }
     }
     
-    private static List<String> findUpdatedRepositories(final String solrUrl, int minutesAgo) throws SolrServerException {
+    private static List<String> findUpdatedRepositories(final String solrUrl, int minutesAgo) throws IOException {
         final List<String> refIds = new ArrayList<>();
         Iterator<SolrDocument> updated = SolrHelper.getRecordsForQuery(solrUrl, getQuery(minutesAgo) + " AND " + TYPES + ":repository", "id", "repository");
         while (updated.hasNext()) {

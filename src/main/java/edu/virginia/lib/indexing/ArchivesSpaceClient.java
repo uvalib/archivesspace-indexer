@@ -105,14 +105,7 @@ public class ArchivesSpaceClient {
        // getQuery(minutesAgo) + " AND " + TYPES + ":repository", "id"
         String solrQuery = "id:\""+refId+"\"";
         Iterator<SolrDocument> recordIter;
-        try
-        {
-            recordIter = SolrHelper.getRecordsForQuery(solrUrl, solrQuery, "json", null);
-        }
-        catch (SolrServerException e)
-        {
-            throw new IOException("Accessing SolrServer", e);
-        }
+        recordIter = SolrHelper.getRecordsForQuery(solrUrl, solrQuery, "json", null);
         String json = null;
         while (recordIter.hasNext()) {
             SolrDocument d = recordIter.next();

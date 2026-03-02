@@ -199,9 +199,6 @@ public abstract class ASpaceObject {
                     this.digitalObjectsSolr.add(new ASpaceDigitalObject(c, ref));
                 }
             }
-            catch (SolrServerException e) {
-                throw new RuntimeException(e);
-            }
             catch (IOException e)  {
                 throw new RuntimeException(e);
             }
@@ -282,9 +279,6 @@ public abstract class ASpaceObject {
                     ASpaceArchivalObject asao = new ASpaceArchivalObject(this.c, ao_uri, new KeyValues("uri", ao_uri), new KeyValues("title", ao_title), new KeyValues("summary", ao_summary));
                     archivalObjectsSolr.add(asao);
                 }
-            }
-            catch (SolrServerException e) {
-                throw new RuntimeException(e);
             }
             catch (IOException e)  {
                 throw new RuntimeException(e);
@@ -368,9 +362,6 @@ public abstract class ASpaceObject {
                     String currentLocationRefStr = currentLocationRef != null ? currentLocationRef.toString() : null;
                     this.containersSolr.add(new ASpaceTopContainer(c, uriobj.toString(), barcodeStr, containerCallNumberStr, currentLocationRefStr));
                 }
-            }
-            catch (SolrServerException e) {
-                throw new RuntimeException(e);
             }
             catch (IOException e)  {
                 throw new RuntimeException(e);
