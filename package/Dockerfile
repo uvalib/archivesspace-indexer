@@ -1,7 +1,7 @@
 # 
 # build the target application
 #
-FROM public.ecr.aws/docker/library/amazoncorretto:17-al2023-jdk as builder
+FROM public.ecr.aws/docker/library/amazoncorretto:17-al2023-jdk AS builder
 ENV JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64
 
 # update and install dependancies
