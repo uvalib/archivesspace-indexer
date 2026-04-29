@@ -1,6 +1,8 @@
 package edu.virginia.lib.indexing;
 
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
@@ -40,7 +42,7 @@ public class ArchivesSpaceClient {
 
     private String sessionToken;
     
-    private Map<String, JsonObject> refCacheMap = null;
+    private Cache<String, JsonObject> refCacheMap = null;
     
     public ArchivesSpaceClient(final String baseUrl, final String username, final String password, String solrUrl) throws IOException {
         this.baseUrl = baseUrl;
@@ -79,26 +81,36 @@ public class ArchivesSpaceClient {
     }
 
     public JsonObject resolveReference(final String refId) throws IOException {
+
         if (IndexRecords.debugUse == null) {
             if (refCacheMap == null) {
-                refCacheMap = new LinkedHashMap<>();
-            }
+                refCacheMap = Caffeine.newBuilder()
+                            .maximumWeight(50 * 1024 * 1024) // ~50MB cache
+                            .weigher((String key, JsonObject value) ->
+                                value.toString().length()    // rough size estimate
+                            )
+                            .build(); 
+                }
         }
-        if (refCacheMap != null && refCacheMap.containsKey(refId)) {
+        JsonObject cached = (refCacheMap != null) ? refCacheMap.getIfPresent(refId) : null;
+        if (cached != null) {
             LOGGER.debug("Already have " + refId);
-            return refCacheMap.get(refId);
+            return cached;
         }
+
         LOGGER.debug("FETCHING " + refId);
+
         JsonObject result = (JsonObject) makeSolrGetRequest(refId);
-        if (result == null)
-        {
+        if (result == null) {
             LOGGER.warn("Failed to fetch ref from solr " + refId);
             result = (JsonObject) makeGetRequestId(refId);
         }
-        if (refCacheMap != null) {
+
+        if (result != null && refCacheMap != null) {
             refCacheMap.put(refId, result);
         }
-        return(result);
+
+        return (result);
     }
 
     public JsonStructure makeSolrGetRequest(final String refId) throws IOException {

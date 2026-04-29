@@ -12,3 +12,4 @@ results
 .classpath
 .settings
 env.*
+/bin/
