@@ -776,7 +776,8 @@ public abstract class ASpaceObject {
         XMLOutputFactory xmlOutputFactory = XMLOutputFactory.newFactory();
         final File outputFile = getSolrOutputFile(outputDir, getRecord().getString("uri"));
         outputFile.getParentFile().mkdirs();
-        XMLStreamWriter xmlOut = xmlOutputFactory.createXMLStreamWriter(new FileOutputStream(outputFile));
+        OutputStream os = new FileOutputStream(outputFile);
+        XMLStreamWriter xmlOut =  XMLOutputFactory.newInstance().createXMLStreamWriter(os, "UTF-8");
         String path = outputFile.getAbsolutePath();
         xmlOut.writeStartDocument("UTF-8", "1.0");
         xmlOut.writeCharacters("\n");

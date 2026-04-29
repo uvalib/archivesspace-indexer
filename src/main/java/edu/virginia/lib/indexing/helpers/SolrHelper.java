@@ -24,6 +24,7 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.Http2SolrClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -40,16 +41,29 @@ public class SolrHelper {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SolrHelper.class);
     
-    public static Iterator<SolrDocument> getRecordsForQuery(String solrUrl, String query, String fieldList, String label) throws IOException {
-        int start = 0;
+    private static SolrClient client = null;
+
+    @SuppressWarnings("deprecation")
+    public static synchronized SolrClient getClient(String solrUrl) {
+        if (client == null) {
+            client = new HttpSolrClient.Builder(solrUrl)
+                    .withConnectionTimeout(10000)
+                    .withSocketTimeout(60000)
+                    .build();
+        }
+        return client;
+    }
+
+    public static Iterator<SolrDocument> getRecordsForQuery(
+            String solrUrl, String query, String fieldList, String label) {
+
         final ModifiableSolrParams p = new ModifiableSolrParams();
-        p.set("q", new String[] { query });
-        p.set("rows", 5000);
-        p.set("start", start);
+        p.set("q", query);
+        p.set("rows", 1000);  // <- reduce from 5000 (important)
         if (fieldList != null) {
             p.set("fl", fieldList);
         }
-            
+
         return new Iterator<SolrDocument>() {
 
             int index = 0;
@@ -60,13 +74,13 @@ public class SolrHelper {
                 if (response == null || response.getResults().size() <= index) {
                     p.set("rows", 5000);
                     p.set("start", start);
-                    try (SolrClient client = new Http2SolrClient.Builder(solrUrl)
-                            .withConnectionTimeout(10000, TimeUnit.MILLISECONDS)
-                            .withIdleTimeout(60000, TimeUnit.MILLISECONDS)
-                            .build()){
-                        response = client.query(p);
+                    // Do not create a new client for each call.  This ends up causing OutOfMemory errors
+                    try {
+                        response = getClient(solrUrl).query(p);
+
                         int numRetrieved = response.getResults().size();
                         long totalNumber = response.getResults().getNumFound();
+
                         start += numRetrieved;
                         if (label != null && (numRetrieved > 0 || start == 0)) {
                             if (start < totalNumber) 
@@ -82,9 +96,10 @@ public class SolrHelper {
                     } catch (SolrServerException e) {
                         throw new RuntimeException(e);
                     } catch (IOException e) {
-						throw new RuntimeException(e);
-					}
+                        throw new RuntimeException(e);
+                    }
                 }
+
                 return response.getResults().size() > index;
             }
 
