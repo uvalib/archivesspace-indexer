@@ -128,8 +128,9 @@ public class IndexRecords {
             }
         }
 
-        final File marcRecords = new File(marcOutput, new SimpleDateFormat("yyyy-MM-dd").format(new Date()) + "-updates.mrc");
-        MarcStreamWriter marcStream = new MarcStreamWriter(new FileOutputStream(marcRecords));
+//        final File marcRecords = new File(marcOutput, new SimpleDateFormat("yyyy-MM-dd").format(new Date()) + "-updates.mrc");
+//      MarcStreamWriter marcStream = new MarcStreamWriter(new FileOutputStream(marcRecords));
+        MarcStreamWriter marcStream = null;
         final File marcXmlRecords = new File(marcXmlOutput, new SimpleDateFormat("yyyy-MM-dd").format(new Date()) + "-updates.xml");
         MarcXmlWriter xmlWriter = new MarcXmlWriter(new FileOutputStream(marcXmlRecords));
         for (String ref : refsToUpdate) {
@@ -159,8 +160,8 @@ public class IndexRecords {
                 }
             }
         }
-        marcStream.close();
-        xmlWriter.close();
+        if (marcStream != null) marcStream.close();
+        if (xmlWriter != null) xmlWriter.close();
         LOGGER.info("Completed at " + new Date());
         final long elapsedSeconds = ((System.currentTimeMillis() - start) / 1000);
         LOGGER.info((elapsedSeconds / 60) + " minutes elapsed");
