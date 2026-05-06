@@ -5,7 +5,7 @@
         </encoder>
     </appender>
 
-    <logger name="edu.virginia.lib" additivity="false" level="INFO">
+    <logger name="edu.virginia.lib" additivity="false" level="DEBUG">
         <appender-ref ref="CONSOLE"/>
     </logger>
 

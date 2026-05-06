@@ -45,10 +45,19 @@ public class ASpaceCollection extends ASpaceObject {
     public boolean isPublished() {
         JsonObject cm = getRecord().getJsonObject("collection_management");
         boolean published = getRecord().getBoolean("publish");
-        boolean collectionManagementCompleted = cm != null && cm.get("processing_status") != null  && "completed".equals(cm.getString("processing_status"));
+        boolean collectionManagementCompleted = false;
+        if (cm == null) 
+        {
+            collectionManagementCompleted = true; 
+        }
+        if (cm != null && cm.get("processing_status") != null  && "completed".equals(cm.getString("processing_status")))
+        {
+            collectionManagementCompleted = true; 
+        }
         boolean hasTopContainers = !getTopContainers().isEmpty();
         boolean hasPublishedDigitalObjects = !getDigitalObjects().isEmpty();
 
+//      boolean result = published && collectionManagementCompleted && (hasTopContainers);
 //      boolean result = published && collectionManagementCompleted && (hasTopContainers);
         boolean result = published && collectionManagementCompleted && (hasTopContainers || hasPublishedDigitalObjects);
         return (result);
