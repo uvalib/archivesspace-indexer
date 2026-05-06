@@ -1051,7 +1051,8 @@ public abstract class ASpaceObject {
                         }
                         else
                         {
-                        	noteText = (note.getJsonArray("content") != null)? note.getJsonArray("content").getJsonString(0).toString() : "";
+                        	JsonArray content = note.getJsonArray("content");
+                        	noteText = (content != null && content.size() > 0)? note.getJsonArray("content").getJsonString(0).toString() : "";
                         }
                         if (noteText.length() > 0)
                         {
