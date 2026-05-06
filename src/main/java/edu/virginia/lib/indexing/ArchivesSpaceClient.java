@@ -115,7 +115,6 @@ public class ArchivesSpaceClient {
 
     public JsonStructure makeSolrGetRequest(final String refId) throws IOException {
        // getQuery(minutesAgo) + " AND " + TYPES + ":repository", "id"
-//?       return null;
         String solrQuery = "id:\""+refId+"\"";
         Iterator<SolrDocument> recordIter;
         recordIter = SolrHelper.getRecordsForQuery(solrUrl, solrQuery, "json", null);
