@@ -836,10 +836,21 @@ public abstract class ASpaceObject {
             if (subjects != null && subjects.getValueType() == JsonValue.ValueType.ARRAY) {
                 for (JsonValue sub : (JsonArray) subjects) {
                     final String ref = ((JsonObject) sub).getString("ref");
-                    final JsonObject subject = c.resolveReference(ref);
-                    // TODO: break up these subjects
-                    if (subject.getBoolean("publish")) {
-                        addField(xmlOut, "subject_tsearchf_stored", subject.getString("title"));
+                    try{ 
+                    	final JsonObject subject = c.resolveReference(ref);
+	                    // TODO: break up these subjects
+	                    if (subject.getBoolean("publish")) {
+	                        addField(xmlOut, "subject_tsearchf_stored", subject.getString("title"));                    
+	                    }
+                    }
+                    catch (NullPointerException npe) {
+                    	
+                    }
+                    catch (RuntimeException re) {
+                    	
+                    }
+                    catch (IOException ioe) {
+                    	
                     }
                 }
             }
@@ -951,8 +962,8 @@ public abstract class ASpaceObject {
                 for (JsonValue agentLink : (JsonArray) agents) {
                     final String ref = ((JsonObject) agentLink).getString("ref");
                     final String role = ((JsonObject) agentLink).getString("role");
-                    final JsonObject agent = c.resolveReference(ref);
                     try {
+                    	final JsonObject agent = c.resolveReference(ref);
                         if (agent.getBoolean("publish")) {
                             if (role.equals("creator")) {
                                 final String name = agent.getString("title");
@@ -960,6 +971,10 @@ public abstract class ASpaceObject {
                             }
                         }
                     } catch (NullPointerException e) {
+                        // TODO: do something better than skipping it
+                    } catch (RuntimeException e) {
+                        // TODO: do something better than skipping it
+                    } catch (IOException e) {
                         // TODO: do something better than skipping it
                     }
                 }
